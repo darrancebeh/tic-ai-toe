@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react'; // Add useRef
-import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo } from 'react-icons/fi'; // Add FiInfo icon
+import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo, FiLoader, FiRotateCcw } from 'react-icons/fi'; // Add FiInfo, FiLoader, FiRotateCcw icons
 
 // --- Define type for winner result ---
 interface WinnerInfo {
@@ -224,6 +224,52 @@ function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
 }
 
 
+// --- Simple Confirmation Modal Component ---
+interface ConfirmModalProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmModal({ 
+  isOpen, 
+  title, 
+  message, 
+  confirmText = "Confirm", 
+  cancelText = "Cancel", 
+  onConfirm, 
+  onCancel 
+}: ConfirmModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-w-sm w-full p-6">
+        <h2 className="text-xl font-bold text-white mb-4">{title}</h2>
+        <p className="text-gray-300 mb-6">{message}</p>
+        <div className="flex justify-end gap-4">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   // --- Core Game State ---
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
@@ -239,6 +285,14 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState<boolean>(false); // General thinking/loading indicator
   const [showMetricsGuide, setShowMetricsGuide] = useState<boolean>(false); // State for metrics guide modal
+  const [isResettingAI, setIsResettingAI] = useState<boolean>(false); // Loading state for Reset AI button
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false); // State for confirmation modal
+  const [confirmModalProps, setConfirmModalProps] = useState<Omit<ConfirmModalProps, 'isOpen'>>({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
 
   // --- States for Batch Training Visualization ---
   const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false); // State for batch training loading
@@ -292,41 +346,53 @@ export default function Home() {
 
   // --- Reset AI Learning ---
   const resetAI = useCallback(async () => {
-    if (!window.confirm("Are you sure you want to reset the AI's learning? This will delete all its learned knowledge.")) {
-      return; // User cancelled
-    }
-    
-    setError(null);
-    try {
-      setIsThinking(true); // Show loading state
-      const response = await fetch(`${API_URL}/ai/reset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`API Reset Error: ${errorData.detail || response.statusText}`);
+    // Use custom modal instead of window.confirm
+    setConfirmModalProps({
+      title: "Reset AI Learning?",
+      message: "Are you sure you want to reset the AI's learning? This will delete all its learned knowledge and reset scores.",
+      confirmText: "Reset AI",
+      onConfirm: async () => {
+        setShowConfirmModal(false);
+        setError(null);
+        setIsResettingAI(true); // Start loading indicator for Reset AI button
+        setIsThinking(true); // Use general thinking state as well
+        try {
+          const response = await fetch(`${API_URL}/ai/reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`API Reset Error: ${errorData.detail || response.statusText}`);
+          }
+          
+          const updatedStatus: AIStatus = await response.json();
+          setAiStatus(updatedStatus); // Update with reset AI status
+          
+          // Reset the game and scores when AI is reset
+          setBoard(Array(9).fill(null));
+          setWinnerInfo({ winner: null, line: null });
+          setScore({ wins: 0, draws: 0, losses: 0 });
+          setCurrentPlayer('X');
+          setGameStarted(false);
+          setNextStarter('O');
+          
+        } catch (err) {
+          console.error("Failed to reset AI:", err);
+          setError(err instanceof Error ? err.message : "Failed to reset AI learning.");
+        } finally {
+          setIsResettingAI(false); // Stop loading indicator for Reset AI button
+          setIsThinking(false); // Stop general thinking state
+        }
+      },
+      onCancel: () => {
+        setShowConfirmModal(false);
       }
-      
-      const updatedStatus: AIStatus = await response.json();
-      setAiStatus(updatedStatus); // Update with reset AI status
-      
-      // Reset the game and scores when AI is reset
-      setBoard(Array(9).fill(null));
-      setWinnerInfo({ winner: null, line: null });
-      setScore({ wins: 0, draws: 0, losses: 0 });
-      setCurrentPlayer('X');
-      setGameStarted(false);
-      setNextStarter('O');
-      
-    } catch (err) {
-      console.error("Failed to reset AI:", err);
-      setError(err instanceof Error ? err.message : "Failed to reset AI learning.");
-    } finally {
-      setIsThinking(false);
-    }
-  }, []);
+    });
+    setShowConfirmModal(true);
+
+  }, []); // Dependencies remain empty
 
   // --- Visual Simulation Logic ---
   const runVisualSimulationStep = useCallback(() => {
@@ -414,10 +480,7 @@ export default function Home() {
 
     console.log(`Triggering batch training for ${rounds} rounds...`);
     setIsBatchTraining(true); // Start loading indicator (keeps button disabled)
-    
-    // Initialize training progress for visualization
     setTrainingProgress({ current: 0, total: rounds, completed: 0 });
-    
     startVisualSimulation(); // Start the visual simulation
     setError(null);
 
@@ -475,7 +538,7 @@ export default function Home() {
         stopVisualSimulation(); // Stop the visual simulation
       }, 1000); // Allow users to see the completed state for 1 second
     }
-  }, [fetchAIStatus, isBatchTraining, startVisualSimulation, stopVisualSimulation]); // Add simulation controls to dependencies
+  }, [fetchAIStatus, isBatchTraining, startVisualSimulation, stopVisualSimulation]);
 
   // --- Effect to Check Winner & Handle Game End ---
   useEffect(() => {
@@ -496,7 +559,7 @@ export default function Home() {
       // Trigger learning regardless of mode (backend handles reward based on 'O')
       triggerLearning(board, currentWinnerInfo.winner);
     }
-  }, [board, winnerInfo.winner, triggerLearning]); // REMOVED gameMode from dependencies
+  }, [board, winnerInfo.winner, triggerLearning]);
 
   // --- Effect for AI Move (Player vs AI) ---
   useEffect(() => {
@@ -585,27 +648,25 @@ export default function Home() {
   };
 
   // --- Reset Game Function ---
-  const resetGame = () => { // REMOVED switchToPlayerVsAi parameter
+  const resetGame = () => { 
     setBoard(Array(9).fill(null));
-    setWinnerInfo({ winner: null, line: null }); // Reset winner info
+    setWinnerInfo({ winner: null, line: null }); 
     setError(null);
-    setIsThinking(false); // Ensure thinking is false initially
+    setIsThinking(false); 
+    // Stop any potential AI thinking from previous game state if reset mid-turn
+    // (No dedicated loading state needed here, button disabled by isThinking/isBatchTraining)
 
-    // Always reset to Player vs AI mode (the only mode now)
-    // REMOVED gameMode setting
     // --- Alternating Starter Logic ---
-    setCurrentPlayer(nextStarter); // Set the starting player for this round
-    const nextGameStarter = nextStarter === 'X' ? 'O' : 'X'; // Determine who starts the *next* round
-    setNextStarter(nextGameStarter); // Update state for the next round
+    setCurrentPlayer(nextStarter); 
+    const nextGameStarter = nextStarter === 'X' ? 'O' : 'X'; 
+    setNextStarter(nextGameStarter); 
 
-    // If AI ('O') is starting this round, set thinking to true to trigger its move
     if (nextStarter === 'O') {
       setIsThinking(true);
     }
     // --- End Alternating Starter Logic ---
+    setGameStarted(false); // Reset game started state
 
-    // Score persists across playerVsAi games
-    // Fetch status on reset to show latest AI state
     fetchAIStatus();
   };
 
@@ -705,6 +766,13 @@ export default function Home() {
           {status}
         </div>
 
+        {/* Score Display */}
+        <div className="mb-3 text-sm text-gray-400 flex gap-4 justify-center font-mono">
+          <span>Wins: <span className="text-green-400 font-semibold">{score.wins}</span></span>
+          <span>Draws: <span className="text-yellow-400 font-semibold">{score.draws}</span></span>
+          <span>Losses: <span className="text-red-400 font-semibold">{score.losses}</span></span>
+        </div>
+
          {/* AI Status Display */}
          <div className="mb-4 text-sm text-gray-400 h-auto min-h-[4rem] flex flex-col items-center text-center gap-y-1"> {/* Increased min-height */}
              {/* Metrics Guide Button */}
@@ -748,7 +816,11 @@ export default function Home() {
                    {cell || <>&nbsp;</>}
                  </div>
                ))}
-               <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-black/40">
+               <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-black/60">
+                   {/* Added Context Text */} 
+                   <p className="text-white text-xs font-semibold bg-black/70 px-2 py-1 rounded shadow">
+                    Simulating AI Self-Play...
+                   </p>
                    <p className="text-white text-lg font-semibold bg-purple-600/90 px-4 py-2 rounded-md shadow-lg animate-pulse">
                     Training AI...
                    </p>
@@ -813,36 +885,52 @@ export default function Home() {
            )}
          </div>
 
-         {/* --- Main Action Buttons (Train/Self-Play) --- */}
+         {/* --- Main Action Buttons --- */}
          {!isVisualizingBatch && (
            <div className="mb-2 flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
              {/* Batch Training Button */}
              <button
                onClick={() => triggerBatchTraining(1000)} // Example: 1000 rounds
-               disabled={isBatchTraining || isThinking} // Simplified disabled condition
-               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+               disabled={isBatchTraining || isThinking || isResettingAI} // Disable if training, thinking, or resetting AI
+               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
              >
-               {isBatchTraining ? 'Training...' : 'Run Batch Training'}
+               {isBatchTraining ? (
+                 <><FiLoader className="animate-spin" /> Training...</>
+               ) : (
+                 'Run Batch Training'
+               )}
+             </button>
+
+             {/* Reset Game Button */}
+             <button
+               onClick={resetGame}
+               // Disable if game not started, game over, AI thinking/training/resetting
+               disabled={!gameStarted || !!winnerInfo.winner || isThinking || isBatchTraining || isResettingAI}
+               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
+             >
+               <FiRotateCcw /> Reset Game
              </button>
 
              {/* Reset AI Button */}
              <button
                onClick={resetAI}
-               disabled={isBatchTraining || isThinking} // Simplified disabled condition
-               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+               disabled={isBatchTraining || isThinking || isResettingAI} // Disable if training, thinking, or resetting AI
+               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
              >
-               Reset AI Learning
+               {isResettingAI ? (
+                 <><FiLoader className="animate-spin" /> Resetting...</>
+               ) : (
+                 'Reset AI Learning'
+               )}
              </button>
            </div>
          )}
          
          {/* Batch Training Disclaimer */}
-         {!isVisualizingBatch && (
-           <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
-             <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-trained games (The AI will play against itself repeatedly for 1000 games). After training, 
-             the AI will become significantly refined and may be almost significantly tougher to beat as it drastically optimizes its strategy.
-           </div>
-         )}
+         <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
+           <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-trained games (The AI will play against itself repeatedly for 1000 games). After training, 
+           the AI will become significantly refined and may be almost significantly tougher to beat as it drastically optimizes its strategy.
+         </div>
 
       </div> {/* End Main Content Container */}
 
@@ -903,6 +991,12 @@ export default function Home() {
       <AIMetricsGuide 
         isOpen={showMetricsGuide} 
         onClose={() => setShowMetricsGuide(false)} 
+      />
+
+      {/* Confirmation Modal */} 
+      <ConfirmModal 
+        isOpen={showConfirmModal}
+        {...confirmModalProps} // Spread the props from state
       />
     </main>
   );
