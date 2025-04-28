@@ -929,7 +929,7 @@ export default function Home() {
          {/* Batch Training Disclaimer */}
          <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
            <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-trained games (The AI will play against itself repeatedly for 1000 games). After training, 
-           the AI will become significantly refined and may be almost significantly tougher to beat as it drastically optimizes its strategy.
+           the AI will become significantly refined and will be significantly tougher to beat as it drastically optimizes its strategy and expands its knowledge context.
          </div>
 
       </div> {/* End Main Content Container */}
