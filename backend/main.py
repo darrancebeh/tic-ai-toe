@@ -207,6 +207,22 @@ def run_batch_training(params: TrainParams):
         raise HTTPException(status_code=500, detail=f"Internal server error during batch training: {e}")
 # --- End Batch Training Endpoint ---
 
+# --- NEW: Reset AI Learning Endpoint ---
+@app.post("/ai/reset", response_model=AIStatus)
+def reset_ai_learning():
+    """Resets the AI's learning by clearing its Q-table and resetting parameters."""
+    try:
+        print("--- Resetting AI Learning ---")
+        agent.reset_learning()
+        print("--- AI Learning Reset Complete ---")
+        
+        # Return the updated AI status
+        return get_ai_status()
+    except Exception as e:
+        print(f"Error during AI learning reset: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error during AI learning reset: {e}")
+# --- End Reset AI Learning Endpoint ---
+
 # --- Server Shutdown Hook --- 
 @app.on_event("shutdown")
 def shutdown_event():

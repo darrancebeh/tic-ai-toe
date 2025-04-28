@@ -294,4 +294,15 @@ class QLearningAgent:
         """Clears the memory of the current game without learning."""
         self._memory = []
         # Do not reset _last_avg_q_change here, let it persist until next learn()
+        
+    def reset_learning(self):
+        """Resets the AI's learning by clearing the Q-table and resetting parameters."""
+        self.q_table = {} # Clear the Q-table
+        self.epsilon = 0.9 # Reset epsilon to initial value
+        self._memory = [] # Clear memory
+        self._last_avg_q_change = None # Reset learning rate tracker
+        # Save the empty Q-table
+        self.save_q_table()
+        print("AI learning has been reset: Q-table cleared and parameters reset.")
+        return True
 

@@ -108,6 +108,45 @@ export default function Home() {
     }
   }, [fetchAIStatus]); // Depends on fetchAIStatus
 
+  // --- Reset AI Learning ---
+  const resetAI = useCallback(async () => {
+    if (!window.confirm("Are you sure you want to reset the AI's learning? This will delete all its learned knowledge.")) {
+      return; // User cancelled
+    }
+    
+    setError(null);
+    try {
+      setIsThinking(true); // Show loading state
+      const response = await fetch(`${API_URL}/ai/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API Reset Error: ${errorData.detail || response.statusText}`);
+      }
+      
+      const updatedStatus: AIStatus = await response.json();
+      setAiStatus(updatedStatus); // Update with reset AI status
+      
+      // Reset the game and scores when AI is reset
+      setBoard(Array(9).fill(null));
+      setWinnerInfo({ winner: null, line: null });
+      setScore({ wins: 0, draws: 0, losses: 0 });
+      setCurrentPlayer('X');
+      setGameStarted(false);
+      setNextStarter('O');
+      setSelfPlayStats({ xWins: 0, oWins: 0, draws: 0, total: 0 });
+      
+    } catch (err) {
+      console.error("Failed to reset AI:", err);
+      setError(err instanceof Error ? err.message : "Failed to reset AI learning.");
+    } finally {
+      setIsThinking(false);
+    }
+  }, []);
+
   // --- Visual Simulation Logic ---
   const runVisualSimulationStep = useCallback(() => {
     setVisualBoard(prevBoard => {
@@ -636,6 +675,15 @@ export default function Home() {
                className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
              >
               {selfPlayState === 'playing' || selfPlayState === 'gameOver' ? 'Continue Self-Training' : 'Start AI Self-Play'}
+             </button>
+             
+             {/* Reset AI Button */}
+             <button
+               onClick={resetAI}
+               disabled={isBatchTraining || selfPlayState === 'playing' || isThinking} // Disable if AI is busy
+               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+             >
+               Reset AI Learning
              </button>
            </div>
          )}
