@@ -348,7 +348,7 @@ export default function Home() {
           <div className="text-center sm:text-right">
             <p>&copy; {currentYear} Darrance Beh Heng Shek. All Rights Reserved.</p>
             <p className="text-xs text-gray-500 mt-1">
-              Built with Next.js, React, TypeScript, and Tailwind CSS.
+              Built with Next.js, React, FastAPI, Pydantic, Tailwind CSS. (Custom implementation of Q-learning algorithm)
             </p>
           </div>
         </div>
