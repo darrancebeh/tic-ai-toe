@@ -49,14 +49,26 @@ interface AIMetricsGuideProps {
 function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
   if (!isOpen) return null;
 
+  // Function to handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Close only if the click is directly on the backdrop
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"
+      onClick={handleBackdropClick} // Add backdrop click handler
+    >
       <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-white">Understanding AI Metrics</h2>
           <button 
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            // Increase size and clickable area
+            className="text-gray-400 hover:text-white transition-colors text-3xl font-bold p-2 -m-2" 
             aria-label="Close"
           >
             &times;
@@ -686,7 +698,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-8 font-[family-name:var(--font-geist-sans)]">
       <div className="flex flex-col items-center justify-center flex-grow w-full max-w-md">
-        <h1 className="text-4xl font-bold mb-4">Tic-my-Toe</h1>
+        <h1 className="text-4xl font-bold mb-4">{'{db} Tic-my-Toe'}</h1>
 
         {/* Game Status */}
         <div className={`mb-1 text-xl h-8 flex items-center justify-center text-center`}> {/* Increased height slightly */}
