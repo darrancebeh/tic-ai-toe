@@ -681,7 +681,10 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between pt-8 px-8 font-[family-name:var(--font-geist-sans)]">
       <div className="flex flex-col items-center justify-center flex-grow w-full max-w-md">
-        <h1 className="text-4xl font-bold mb-4">{'{db} Tic-my-Toe'}</h1>
+        <h1 className="text-4xl font-bold mb-4">
+          <span>Tic-my-Toe</span>
+          <span className="text-lg font-normal text-gray-400 ml-2">by db</span>
+        </h1>
 
         <div className={`mb-1 text-xl h-8 flex items-center justify-center text-center`}>
           {status}
