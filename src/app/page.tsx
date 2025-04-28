@@ -55,10 +55,12 @@ export default function Home() {
   // --- UI & Interaction State ---
   const [error, setError] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState<boolean>(false); // General thinking/loading indicator
+  // --- States for Batch Training Visualization ---
   const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false); // State for batch training loading
   const [isVisualizingBatch, setIsVisualizingBatch] = useState<boolean>(false); // State for visual simulation
   const [visualBoard, setVisualBoard] = useState<(string | null)[]>(Array(9).fill(null)); // Board for visualization
   const visualSimulationIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
+  const [trainingProgress, setTrainingProgress] = useState({ current: 0, total: 0, completed: 0 }); // Training progress tracker
 
   // --- AI Status ---
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
@@ -171,7 +173,28 @@ export default function Home() {
       if (availableSpots.length > 0) {
         // Choose a random available spot
         const randomSpot = availableSpots[Math.floor(Math.random() * availableSpots.length)];
+        
+        // Make only ONE move per simulation step for clearer visibility
         currentBoard[randomSpot] = nextPlayer;
+        
+        // Sometimes make strategic moves for more realistic visualization
+        if (Math.random() > 0.6) {
+          // Check if there's a winning move for either player
+          for (let i = 0; i < availableSpots.length; i++) {
+            const testSpot = availableSpots[i];
+            if (testSpot !== randomSpot) { // Don't check the spot we already filled
+              const testBoard = [...currentBoard];
+              testBoard[testSpot] = nextPlayer;
+              const testWinner = calculateWinner(testBoard);
+              if (testWinner.winner === nextPlayer) {
+                // Found a winning move, use it instead
+                currentBoard[randomSpot] = null; // Undo the random move
+                currentBoard[testSpot] = nextPlayer; // Make the winning move
+                break;
+              }
+            }
+          }
+        }
       }
 
       return currentBoard;
@@ -185,8 +208,8 @@ export default function Home() {
     if (visualSimulationIntervalRef.current) {
       clearInterval(visualSimulationIntervalRef.current);
     }
-    // Update visual board quickly
-    visualSimulationIntervalRef.current = setInterval(runVisualSimulationStep, 100); // e.g., every 100ms
+    // Much slower animation speed (250ms) to make moves clearly visible
+    visualSimulationIntervalRef.current = setInterval(runVisualSimulationStep, 250); // Changed from 50ms to 250ms
   }, [runVisualSimulationStep]);
 
   const stopVisualSimulation = useCallback(() => {
@@ -212,10 +235,18 @@ export default function Home() {
 
     console.log(`Triggering batch training for ${rounds} rounds...`);
     setIsBatchTraining(true); // Start loading indicator (keeps button disabled)
+    
+    // Initialize training progress for visualization
+    setTrainingProgress({ current: 0, total: rounds, completed: 0 });
+    
     startVisualSimulation(); // Start the visual simulation
     setError(null);
 
+    // Define the simulation step size to update the counter
+    const stepSize = Math.max(1, Math.floor(rounds / 50)); // Update roughly 50 times during training
+    
     try {
+      const startTime = Date.now(); // Track when we started
       const response = await fetch(`${API_URL}/ai/train_batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,9 +258,31 @@ export default function Home() {
         throw new Error(`API Batch Train Error: ${errorData.detail || response.statusText}`);
       }
 
+      // Simulate progress updates while waiting for response
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += stepSize;
+        if (progress >= rounds) {
+          clearInterval(progressInterval);
+          progress = rounds;
+        }
+        setTrainingProgress(prev => ({
+          ...prev,
+          current: progress,
+          completed: Math.floor((progress / rounds) * 100)
+        }));
+      }, 50); // Update every 50ms to match the visualization speed
+
       const updatedStatus: AIStatus = await response.json();
+      
+      // Clean up the progress interval when we get response
+      clearInterval(progressInterval);
+      
+      // Set the final progress to 100%
+      setTrainingProgress(prev => ({ ...prev, current: rounds, completed: 100 }));
+      
       setAiStatus(updatedStatus); // Update status with result from batch training
-      console.log("Batch training completed successfully.");
+      console.log(`Batch training completed successfully in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 
     } catch (err) {
       console.error("Failed to trigger AI batch training:", err);
@@ -237,8 +290,11 @@ export default function Home() {
       // Fetch status even on error to see if anything changed partially
       await fetchAIStatus();
     } finally {
-      setIsBatchTraining(false); // Stop loading indicator
-      stopVisualSimulation(); // Stop the visual simulation
+      // Keep the visualization running for a brief moment to show completion
+      setTimeout(() => {
+        setIsBatchTraining(false); // Stop loading indicator
+        stopVisualSimulation(); // Stop the visual simulation
+      }, 1000); // Allow users to see the completed state for 1 second
     }
   }, [fetchAIStatus, isBatchTraining, startVisualSimulation, stopVisualSimulation]); // Add simulation controls to dependencies
 
@@ -606,14 +662,37 @@ export default function Home() {
                {visualBoard.map((cell, index) => (
                  <div
                    key={`vis-${index}`}
-                   className={`w-full h-full flex items-center justify-center border border-purple-400/50 text-4xl font-bold
-                               ${cell === 'X' ? 'text-blue-400' : cell === 'O' ? 'text-red-400' : ''}`}
+                   className={`w-full h-full flex items-center justify-center border border-purple-400/50 text-4xl font-bold 
+                               transition-all duration-300 ease-in-out
+                               ${cell === 'X' ? 'text-blue-400 bg-blue-900/20 animate-fadeIn' : 
+                                 cell === 'O' ? 'text-red-400 bg-red-900/20 animate-fadeIn' : ''}`}
                  >
                    {cell || <>&nbsp;</>}
                  </div>
                ))}
-               <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30">
-                   <p className="text-white text-lg font-semibold bg-purple-600/80 px-3 py-1 rounded">Visualizing Training...</p>
+               <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-black/40">
+                   <p className="text-white text-lg font-semibold bg-purple-600/90 px-4 py-2 rounded-md shadow-lg animate-pulse">
+                    Training AI...
+                   </p>
+                   {isBatchTraining && (
+                     <div className="flex flex-col items-center bg-black/60 px-6 py-3 rounded-md">
+                       <div className="w-48 h-3 bg-gray-700 rounded-full overflow-hidden mb-1">
+                         <div 
+                           className="h-full bg-purple-400 transition-all duration-150 shadow-glow" 
+                           style={{ width: `${trainingProgress.completed}%` }}
+                         />
+                       </div>
+                       <p className="text-white text-sm">
+                         <span className="font-mono">{trainingProgress.current.toLocaleString()}</span> / 
+                         <span className="font-mono"> {trainingProgress.total.toLocaleString()}</span> games
+                         {trainingProgress.completed > 0 && 
+                          <span className="ml-1 font-semibold text-purple-300">
+                            ({trainingProgress.completed}%)
+                          </span>
+                         }
+                       </p>
+                     </div>
+                   )}
                </div>
              </div>
            ) : (
@@ -658,7 +737,7 @@ export default function Home() {
 
          {/* --- Main Action Buttons (Train/Self-Play) --- */}
          {!isVisualizingBatch && (
-           <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
+           <div className="mb-2 flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
              {/* Batch Training Button */}
              <button
                onClick={() => triggerBatchTraining(1000)} // Example: 1000 rounds
@@ -687,31 +766,14 @@ export default function Home() {
              </button>
            </div>
          )}
-
-         {/* Control Buttons Container */}
-         <div className="mt-6 flex flex-col sm:flex-row gap-4 items-center justify-center"> {/* Increased margin-top */}
-           {/* --- Player vs AI Reset Button --- */}
-           {gameMode === 'playerVsAi' && winnerInfo.winner && (
-             <button
-               onClick={() => resetGame(false)} // Keep playerVsAi mode
-               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors w-full sm:w-auto" // Full width on small screens
-             >
-               Play Again
-             </button>
-           )}
-
-           {/* --- Self-Play Mode Controls --- */}
-           {gameMode === 'selfPlay' && selfPlayState === 'gameOver' && (
-             <>
-               <button
-                 onClick={() => resetGame(true)} // Switch to player vs AI
-                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors w-full sm:w-auto" // Full width on small screens
-               >
-                 Play vs AI Now
-               </button>
-             </>
-           )}
-         </div> {/* End Control Buttons Container */}
+         
+         {/* Batch Training Disclaimer */}
+         {!isVisualizingBatch && (
+           <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
+             <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-play games. After training, 
+             the AI will become significantly stronger and may be almost impossible to beat as it optimizes its strategy.
+           </div>
+         )}
 
       </div> {/* End Main Content Container */}
 
