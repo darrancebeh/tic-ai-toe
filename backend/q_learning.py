@@ -2,6 +2,7 @@ import random
 import json
 import os
 from typing import List, Optional, Tuple, Dict
+import math # Import math for isnan
 
 # Define type aliases for clarity
 State = Tuple[Optional[str], ...]
@@ -33,6 +34,7 @@ class QLearningAgent:
         self.q_table_file = q_table_file
         self.q_table: QTable = self.load_q_table()
         self._memory: List[Tuple[State, int]] = []
+        self._last_avg_q_change: Optional[float] = None # <-- RE-ADD attribute
 
     def state_to_tuple(self, board: List[Optional[str]]) -> State:
         """Converts the board list to an immutable tuple for use as a dictionary key."""
@@ -49,11 +51,18 @@ class QLearningAgent:
                     q_table = {}
                     for state_str, actions in q_data.items():
                         # Convert state string representation back to tuple
-                        state_tuple = tuple(state_str.split(',') ) # Assuming comma separation
-                        q_table[state_tuple] = {int(k): v for k, v in actions.items()}
+                        # Handle potential empty strings from split if state_str is empty (shouldn't happen for valid states)
+                        state_tuple_parts = state_str.split(',')
+                        state_tuple = tuple(part if part != '' else '' for part in state_tuple_parts)
+                        # Ensure the tuple has the correct length (9 for TicTacToe)
+                        if len(state_tuple) == 9:
+                            q_table[state_tuple] = {int(k): v for k, v in actions.items()}
+                        else:
+                            print(f"Warning: Skipping invalid state string during load: '{state_str}'")
+
                     print(f"Loaded Q-table with {len(q_table)} states.")
                     return q_table
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, IOError, ValueError) as e: # Added ValueError for int conversion
                 print(f"Error loading Q-table: {e}. Starting with an empty table.")
                 return {}
         return {}
@@ -64,7 +73,8 @@ class QLearningAgent:
             # Convert tuple states to string representations for JSON
             q_data = {}
             for state_tuple, actions in self.q_table.items():
-                state_str = ",".join(state_tuple) # Simple comma separation
+                # Ensure elements are strings before joining
+                state_str = ",".join(str(s) if s is not None else '' for s in state_tuple)
                 q_data[state_str] = actions # Actions are already JSON serializable (int keys, float values)
 
             with open(self.q_table_file, 'w') as f:
@@ -95,9 +105,19 @@ class QLearningAgent:
         # Return the maximum Q-value, representing the AI's expected outcome
         return max(q_values)
 
+    # --- RE-ADD Method ---
+    def get_last_avg_q_change(self) -> Optional[float]:
+        """Returns the average Q-value change from the last learning step."""
+        return self._last_avg_q_change
+    # ---------------------
+
     def get_available_actions(self, board: List[Optional[str]]) -> List[int]:
         """Returns a list of indices of empty cells."""
-        return [i for i, spot in enumerate(board) if spot is None]
+        # Ensure board has 9 elements before processing
+        if len(board) != 9:
+            print(f"Warning: Received board with invalid length {len(board)}")
+            return []
+        return [i for i, spot in enumerate(board) if spot is None or spot == '']
 
     def choose_action(self, board: List[Optional[str]]) -> Optional[int]:
         """Chooses an action using rules (win/block) then epsilon-greedy strategy."""
@@ -135,14 +155,19 @@ class QLearningAgent:
             q_values = {act: self.get_q_value(state, act) for act in available_actions}
             max_q = -float('inf')
             # Handle states with no Q-values yet - default to 0
-            if not any(q != 0.0 for q in q_values.values()):
-                 max_q = 0.0 # If all are 0 (or state is new), treat max as 0
+            if not q_values: # Should not happen if available_actions is not empty
+                 action = random.choice(available_actions)
+                 print(f"AI Debug: No Q-values found for state, choosing randomly.")
+            elif all(q == 0.0 for q in q_values.values()):
+                 # If all known Q-values are 0, choose randomly among available actions
+                 action = random.choice(available_actions)
+                 print(f"AI Debug: All Q-values are 0, exploring randomly.")
+                 max_q = 0.0
             else:
                  max_q = max(q_values.values())
-
-            best_actions = [act for act, q in q_values.items() if q == max_q]
-            action = random.choice(best_actions) # Choose randomly among best actions
-            print(f"AI Debug: Exploiting (Q-val: {max_q:.3f})")
+                 best_actions = [act for act, q in q_values.items() if q == max_q]
+                 action = random.choice(best_actions) # Choose randomly among best actions
+                 print(f"AI Debug: Exploiting (Q-val: {max_q:.3f})")
 
         self._memory.append((state, action))
         return action
@@ -150,53 +175,58 @@ class QLearningAgent:
     def learn(self, reward: float, final_board_state: List[Optional[str]]):
         """Updates Q-values for the sequence of moves made in the last game."""
         if not self._memory:
-            return # Nothing to learn if no moves were made
+            self._last_avg_q_change = 0.0 # No change if no memory
+            return
 
-        next_state = self.state_to_tuple(final_board_state)
-        # The final reward applies directly to the last state-action pair
-        last_state, last_action = self._memory[-1]
-        current_q = self.get_q_value(last_state, last_action)
-        # For the terminal state, the future reward component is 0
-        new_q = current_q + self.alpha * (reward - current_q)
-        if last_state not in self.q_table:
-            self.q_table[last_state] = {}
-        self.q_table[last_state][last_action] = new_q
+        total_q_change = 0.0 # <-- RE-ADD variable
+        num_updates = 0      # <-- RE-ADD variable
 
-        # Propagate rewards back through the game sequence
-        next_max_q = 0.0 # Since the game ended, the value of the final state is the reward itself
+        # --- Refined Backpropagation --- 
+        final_reward_applied = False
+        max_next_q = 0.0 # Value of terminal state is 0 by definition
 
-        for i in reversed(range(len(self._memory) - 1)):
+        for i in reversed(range(len(self._memory))):
             state, action = self._memory[i]
-            next_state_temp, _ = self._memory[i+1]
-
-            # Find max Q-value for the *next* state based on available actions *then*
-            # This requires simulating the available actions from next_state_temp, which is complex.
-            # Simplification: Use the Q-value of the action *actually taken* in the next state as the estimate.
-            # A better way: Calculate max_q for the next_state based on current Q-table.
-            next_available_actions = self.get_available_actions(list(next_state_temp)) # Need to convert tuple back to list temporarily
-            if not next_available_actions:
-                 max_next_q = 0.0 # Terminal state reached earlier than expected?
-            else:
-                 max_next_q = max(self.get_q_value(next_state_temp, next_action) for next_action in next_available_actions)
-
-
             current_q = self.get_q_value(state, action)
-            new_q = current_q + self.alpha * (self.gamma * max_next_q - current_q)
+
+            current_reward = reward if not final_reward_applied else 0.0
+            final_reward_applied = True
+
+            new_q = current_q + self.alpha * (current_reward + self.gamma * max_next_q - current_q)
+
+            # --- RE-ADD Change Tracking ---
+            q_change = abs(new_q - current_q)
+            if not math.isnan(q_change):
+                total_q_change += q_change
+                num_updates += 1 # Count each state-action pair updated
+            # -----------------------------
 
             if state not in self.q_table:
-                self.q_table[state] = {}
+                self.q_table[state] = {} # Ensure state exists
             self.q_table[state][action] = new_q
-            # The reward is only applied at the end, the propagation uses gamma * max_next_q
+
+            current_board_list = list(state)
+            current_available_actions = self.get_available_actions(current_board_list)
+            if not current_available_actions:
+                max_next_q = 0.0
+            else:
+                max_next_q = max(self.get_q_value(state, act) for act in current_available_actions)
+        # --- End Refined Backpropagation ---
+
+        # --- RE-ADD Average Change Calculation ---
+        self._last_avg_q_change = (total_q_change / num_updates) if num_updates > 0 else 0.0
+        # -----------------------------------------
 
         # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+            self.epsilon = max(self.epsilon_min, self.epsilon)
 
-        # Clear memory for the next game
         self._memory = []
-        self.save_q_table() # Save after learning from a game
+        self.save_q_table()
 
     def reset_memory(self):
-        """Clears the memory of the current game without learning (e.g., on server restart or error)."""
+        """Clears the memory of the current game without learning."""
         self._memory = []
+        # Do not reset _last_avg_q_change here, let it persist until next learn()
 
