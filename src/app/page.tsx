@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react'; // Add useRef
 import { FiGithub, FiLinkedin, FiTwitter, FiMail } from 'react-icons/fi';
 
 // --- Define type for winner result ---
@@ -55,6 +55,10 @@ export default function Home() {
   // --- UI & Interaction State ---
   const [error, setError] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState<boolean>(false); // General thinking/loading indicator
+  const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false); // State for batch training loading
+  const [isVisualizingBatch, setIsVisualizingBatch] = useState<boolean>(false); // State for visual simulation
+  const [visualBoard, setVisualBoard] = useState<(string | null)[]>(Array(9).fill(null)); // Board for visualization
+  const visualSimulationIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
 
   // --- AI Status ---
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
@@ -103,6 +107,101 @@ export default function Home() {
       // Don't necessarily set a board error, just log it
     }
   }, [fetchAIStatus]); // Depends on fetchAIStatus
+
+  // --- Visual Simulation Logic ---
+  const runVisualSimulationStep = useCallback(() => {
+    setVisualBoard(prevBoard => {
+      let currentBoard = [...prevBoard];
+      let winnerInfo = calculateWinner(currentBoard); // Use existing winner logic
+
+      // If game over on visual board, reset for next visual game
+      if (winnerInfo.winner) {
+        return Array(9).fill(null);
+      }
+
+      // Determine next player visually (simple alternation)
+      const xCount = currentBoard.filter(c => c === 'X').length;
+      const oCount = currentBoard.filter(c => c === 'O').length;
+      const nextPlayer = xCount <= oCount ? 'X' : 'O';
+
+      // Find available spots
+      const availableSpots = currentBoard
+        .map((val, idx) => (val === null ? idx : null))
+        .filter(val => val !== null) as number[];
+
+      if (availableSpots.length > 0) {
+        // Choose a random available spot
+        const randomSpot = availableSpots[Math.floor(Math.random() * availableSpots.length)];
+        currentBoard[randomSpot] = nextPlayer;
+      }
+
+      return currentBoard;
+    });
+  }, []);
+
+  // --- Start/Stop Visual Simulation ---
+  const startVisualSimulation = useCallback(() => {
+    setIsVisualizingBatch(true);
+    setVisualBoard(Array(9).fill(null)); // Start with empty board
+    if (visualSimulationIntervalRef.current) {
+      clearInterval(visualSimulationIntervalRef.current);
+    }
+    // Update visual board quickly
+    visualSimulationIntervalRef.current = setInterval(runVisualSimulationStep, 100); // e.g., every 100ms
+  }, [runVisualSimulationStep]);
+
+  const stopVisualSimulation = useCallback(() => {
+    setIsVisualizingBatch(false);
+    if (visualSimulationIntervalRef.current) {
+      clearInterval(visualSimulationIntervalRef.current);
+      visualSimulationIntervalRef.current = null;
+    }
+  }, []);
+
+  // --- Cleanup interval on unmount ---
+  useEffect(() => {
+    return () => {
+      if (visualSimulationIntervalRef.current) {
+        clearInterval(visualSimulationIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // --- Modify Trigger Batch Training ---
+  const triggerBatchTraining = useCallback(async (rounds: number = 1000) => {
+    if (isBatchTraining) return; // Prevent multiple simultaneous requests
+
+    console.log(`Triggering batch training for ${rounds} rounds...`);
+    setIsBatchTraining(true); // Start loading indicator (keeps button disabled)
+    startVisualSimulation(); // Start the visual simulation
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/ai/train_batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ num_rounds: rounds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API Batch Train Error: ${errorData.detail || response.statusText}`);
+      }
+
+      const updatedStatus: AIStatus = await response.json();
+      setAiStatus(updatedStatus); // Update status with result from batch training
+      console.log("Batch training completed successfully.");
+
+    } catch (err) {
+      console.error("Failed to trigger AI batch training:", err);
+      setError(err instanceof Error ? err.message : "Failed during batch training.");
+      // Fetch status even on error to see if anything changed partially
+      await fetchAIStatus();
+    } finally {
+      setIsBatchTraining(false); // Stop loading indicator
+      stopVisualSimulation(); // Stop the visual simulation
+    }
+  }, [fetchAIStatus, isBatchTraining, startVisualSimulation, stopVisualSimulation]); // Add simulation controls to dependencies
 
   // --- Effect to Check Winner & Handle Game End ---
   useEffect(() => {
@@ -452,113 +551,123 @@ export default function Home() {
            )}
          </div>
 
-        {/* Game Board - Add conditional styling for game end */}
-        <div className={`grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground mb-6 relative
-                     ${winner === 'Draw' ? 'bg-yellow-500/30 border-yellow-500' : ''}
-                     ${winner && winner !== 'Draw' ? 'opacity-70' : ''} // Dim board slightly on win/loss
-                     `}>
-          {board.map((cell: string | null, index: number) => {
-            // Check if the current cell is part of the winning line
-            const isWinningCell = winningLine?.includes(index) ?? false;
-            // Determine highlight color based on winner
-            const highlightClass = winner === 'X' ? 'bg-green-500/50' : winner === 'O' ? 'bg-red-500/50' : '';
+        {/* AI Strength Description */}
+        {!isVisualizingBatch && (
+          <p className="mb-4 text-sm text-center text-gray-400 italic h-auto min-h-[1.5rem]">
+            {aiStrengthDescription}
+          </p>
+        )}
 
-            return (
-              <button
-                key={index}
-                className={`w-full h-full flex items-center justify-center border border-foreground text-4xl font-bold
-                            hover:bg-foreground/10 transition-colors duration-150
-                            ${cell === 'X' ? 'text-blue-400' : cell === 'O' ? 'text-red-400' : ''}
-                            ${isWinningCell ? highlightClass : ''} // Apply highlight to winning cells
-                            disabled:opacity-60 disabled:cursor-not-allowed`}
-                onClick={() => handleCellClick(index)}
-                // Disable button if cell filled, game over, thinking, or not player's turn in PvP mode
-                disabled={!!cell || !!winner || isThinking || (gameMode === 'playerVsAi' && currentPlayer !== 'X') || gameMode === 'selfPlay'}
-              >
-                {cell || <>&nbsp;</>} {/* Use non-breaking space for consistent height */}
-              </button>
-            );
-          })}
-          {/* Conclusion Overlay (Optional but nice) */}
-          {winner && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className={`text-5xl font-extrabold px-4 py-2 rounded shadow-lg
-                               ${winner === 'Draw' ? 'text-yellow-900 bg-yellow-400/80' : ''}
-                               ${winner === 'X' ? 'text-green-900 bg-green-400/80' : ''}
-                               ${winner === 'O' ? 'text-red-900 bg-red-400/80' : ''}
-                              `}>
-                {winner === 'Draw' ? 'DRAW' : `${winner} WINS!`}
-              </span>
-            </div>
-          )}
-        </div>
+         {/* Game Board Area */}
+         <div className={`w-64 h-64 mb-6 relative`}>
+           {/* Show Visual Simulation OR Actual Game Board */}
+           {isVisualizingBatch ? (
+             // Visual Simulation Board
+             <div className="grid grid-cols-3 gap-2 w-full h-full border-2 border-purple-500 animate-pulse">
+               {visualBoard.map((cell, index) => (
+                 <div
+                   key={`vis-${index}`}
+                   className={`w-full h-full flex items-center justify-center border border-purple-400/50 text-4xl font-bold
+                               ${cell === 'X' ? 'text-blue-400' : cell === 'O' ? 'text-red-400' : ''}`}
+                 >
+                   {cell || <>&nbsp;</>}
+                 </div>
+               ))}
+               <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30">
+                   <p className="text-white text-lg font-semibold bg-purple-600/80 px-3 py-1 rounded">Visualizing Training...</p>
+               </div>
+             </div>
+           ) : (
+             // Actual Game Board
+             <div className={`grid grid-cols-3 gap-2 w-full h-full border-2 border-foreground
+                          ${winner === 'Draw' ? 'bg-yellow-500/30 border-yellow-500' : ''}
+                          ${winner && winner !== 'Draw' ? 'opacity-70' : ''} // Dim board slightly on win/loss
+                          `}>
+               {board.map((cell: string | null, index: number) => {
+                 const isWinningCell = winningLine?.includes(index) ?? false;
+                 const highlightClass = winner === 'X' ? 'bg-green-500/50' : winner === 'O' ? 'bg-red-500/50' : '';
+                 return (
+                   <button
+                     key={index}
+                     className={`w-full h-full flex items-center justify-center border border-foreground text-4xl font-bold
+                                 hover:bg-foreground/10 transition-colors duration-150
+                                 ${cell === 'X' ? 'text-blue-400' : cell === 'O' ? 'text-red-400' : ''}
+                                 ${isWinningCell ? highlightClass : ''}
+                                 disabled:opacity-60 disabled:cursor-not-allowed`}
+                     onClick={() => handleCellClick(index)}
+                     disabled={!!cell || !!winner || isThinking || (gameMode === 'playerVsAi' && currentPlayer !== 'X') || gameMode === 'selfPlay'}
+                   >
+                     {cell || <>&nbsp;</>}
+                   </button>
+                 );
+               })}
+               {/* Conclusion Overlay */}
+               {winner && (
+                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                   <span className={`text-5xl font-extrabold px-4 py-2 rounded shadow-lg
+                                    ${winner === 'Draw' ? 'text-yellow-900 bg-yellow-400/80' : ''}
+                                    ${winner === 'X' ? 'text-green-900 bg-green-400/80' : ''}
+                                    ${winner === 'O' ? 'text-red-900 bg-red-400/80' : ''}
+                                   `}>
+                     {winner === 'Draw' ? 'DRAW' : `${winner} WINS!`}
+                   </span>
+                 </div>
+               )}
+             </div>
+           )}
+         </div>
 
-         {/* Control Buttons */}
-         <div className="flex flex-wrap justify-center items-center gap-4 mb-6 min-h-[40px]"> {/* Ensure min height */}
-            {/* PlayerVsAi Mode Controls */}
-            {gameMode === 'playerVsAi' && (
-              <>
-                {/* Show Reset/Play Again when game ends or error */}
-                {(winnerInfo.winner || error) && (
-                  <button
-                    onClick={() => resetGame(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  >
-                    {error ? 'Reset Game' : 'Play Again?'}
-                  </button>
-                )}
+         {/* --- Main Action Buttons (Train/Self-Play) --- */}
+         {!isVisualizingBatch && (
+           <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
+             {/* Batch Training Button */}
+             <button
+               onClick={() => triggerBatchTraining(1000)} // Example: 1000 rounds
+               disabled={isBatchTraining || selfPlayState === 'playing'} // Disable if training or self-playing
+               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+             >
+               {isBatchTraining ? 'Training...' : 'Run Batch Training'}
+             </button>
 
-                {/* Show Button OR Placeholder Text when game is ongoing/starting */}
-                {!winnerInfo.winner && !error && (
-                  <>
-                    {/* Show Start Self-Play button only when idle AND game hasn't started */}
-                    {!isThinking && !gameStarted ? (
-                      <button
-                        onClick={startSelfPlay}
-                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                      >
-                        Let AI Self-Train
-                      </button>
-                    ) : (
-                      /* Placeholder Text when button is hidden during game */
-                      <p className="text-sm text-gray-400 italic px-4 py-2 text-center">
-                        {aiStrengthDescription}
-                      </p>
-                    )}
-                  </>
-                )}
-              </>
-            )}
+             {/* Self-Play Button */}
+             <button
+               onClick={startSelfPlay}
+               disabled={isBatchTraining || selfPlayState === 'playing'} // Disable if batch training or self-playing
+               className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+             >
+              {selfPlayState === 'playing' || selfPlayState === 'gameOver' ? 'Continue Self-Training' : 'Start AI Self-Play'}
+             </button>
+           </div>
+         )}
 
-           {/* Self-Play Mode Controls */}
+         {/* Control Buttons Container */}
+         <div className="mt-6 flex flex-col sm:flex-row gap-4 items-center justify-center"> {/* Increased margin-top */}
+           {/* --- Player vs AI Reset Button --- */}
+           {gameMode === 'playerVsAi' && winnerInfo.winner && (
+             <button
+               onClick={() => resetGame(false)} // Keep playerVsAi mode
+               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors w-full sm:w-auto" // Full width on small screens
+             >
+               Play Again
+             </button>
+           )}
+
+           {/* --- Self-Play Mode Controls --- */}
            {gameMode === 'selfPlay' && selfPlayState === 'gameOver' && (
              <>
                <button
-                 onClick={() => resetGame(false)} // Continue self-play
-                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-               >
-                 Continue Self-Play
-               </button>
-               <button
                  onClick={() => resetGame(true)} // Switch to player vs AI
-                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors w-full sm:w-auto" // Full width on small screens
                >
                  Play vs AI Now
                </button>
              </>
            )}
-         </div>
+         </div> {/* End Control Buttons Container */}
 
-        {/* Win Rate Counter (Only for Player vs AI) */}
-        {gameMode === 'playerVsAi' && (
-          <div className="mt-4 text-center"> {/* Reduced margin */}
-            <h2 className="text-2xl mb-2">Your Score vs AI</h2>
-            <p>Wins: {score.wins} | Draws: {score.draws} | Losses: {score.losses}</p>
-          </div>
-        )}
-      </div>
+      </div> {/* End Main Content Container */}
 
-      {/* Footer remains the same */}
+      {/* Footer */}
       <footer
         className="w-full py-4 px-4 sm:px-8 bg-opacity-50 text-gray-400 text-sm font-[family-name:var(--font-geist-mono)] border-t border-gray-800 mt-auto" // Ensure footer is at bottom
       >
