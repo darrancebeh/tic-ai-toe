@@ -3,29 +3,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiGithub, FiLinkedin, FiTwitter, FiMail } from 'react-icons/fi';
 
-// Helper function to calculate the winner
-function calculateWinner(squares: (string | null)[]): string | null {
+// --- Define type for winner result ---
+interface WinnerInfo {
+  winner: 'X' | 'O' | 'Draw' | null;
+  line: number[] | null;
+}
+
+// Helper function to calculate the winner and the winning line
+function calculateWinner(squares: (string | null)[]): WinnerInfo {
   const lines = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6],
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+    [0, 4, 8], [2, 4, 6]             // diagonals
   ];
   for (let i = 0; i < lines.length; i++) {
     const [a, b, c] = lines[i];
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return squares[a]; // Return 'X' or 'O'
+      return { winner: squares[a] as 'X' | 'O', line: lines[i] }; // Return winner and line
     }
   }
   // Check for draw (if no winner and board is full)
   if (squares.every(square => square !== null)) {
-    return 'Draw';
+    return { winner: 'Draw', line: null };
   }
-  return null; // No winner yet
+  return { winner: null, line: null }; // No winner yet
 }
 
 // Define the backend API URL
@@ -43,8 +44,10 @@ interface AIStatus {
 export default function Home() {
   // --- Core Game State ---
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
-  const [winner, setWinner] = useState<string | null>(null); // 'X', 'O', 'Draw', or null
-  const [currentPlayer, setCurrentPlayer] = useState<'X' | 'O'>('X'); // Tracks whose turn it is
+  const [winnerInfo, setWinnerInfo] = useState<WinnerInfo>({ winner: null, line: null }); // Store winner and line
+  const [currentPlayer, setCurrentPlayer] = useState<'X' | 'O'>('X'); // Player 'X' starts the very first game
+  const [gameStarted, setGameStarted] = useState<boolean>(false); // Track if the game has started
+  const [nextStarter, setNextStarter] = useState<'X' | 'O'>('O'); // AI ('O') will start the *next* game after the initial one
 
   // --- Player vs AI Score ---
   const [score, setScore] = useState({ wins: 0, draws: 0, losses: 0 });
@@ -103,23 +106,24 @@ export default function Home() {
 
   // --- Effect to Check Winner & Handle Game End ---
   useEffect(() => {
-    const currentWinner = calculateWinner(board);
-    if (currentWinner && !winner) { // Only trigger on new winner
-      setWinner(currentWinner);
+    const currentWinnerInfo = calculateWinner(board);
+    // Only trigger on new winner (when winnerInfo.winner was null but now isn't)
+    if (currentWinnerInfo.winner && !winnerInfo.winner) {
+      setWinnerInfo(currentWinnerInfo); // Set both winner and line
       setIsThinking(false); // Stop thinking indicator
 
       if (gameMode === 'playerVsAi') {
         // Update score only in Player vs AI mode
         setScore(prevScore => {
-          if (currentWinner === 'X') return { ...prevScore, wins: prevScore.wins + 1 };
-          if (currentWinner === 'O') return { ...prevScore, losses: prevScore.losses + 1 };
-          if (currentWinner === 'Draw') return { ...prevScore, draws: prevScore.draws + 1 };
+          if (currentWinnerInfo.winner === 'X') return { ...prevScore, wins: prevScore.wins + 1 };
+          if (currentWinnerInfo.winner === 'O') return { ...prevScore, losses: prevScore.losses + 1 };
+          if (currentWinnerInfo.winner === 'Draw') return { ...prevScore, draws: prevScore.draws + 1 };
           return prevScore;
         });
       }
 
       // Trigger learning regardless of mode (backend handles reward based on 'O')
-      triggerLearning(board, currentWinner);
+      triggerLearning(board, currentWinnerInfo.winner);
 
       if (gameMode === 'selfPlay') {
         setSelfPlayState('gameOver'); // Mark self-play round as over
@@ -130,18 +134,20 @@ export default function Home() {
           let newXWins = prevStats.xWins;
           let newOWins = prevStats.oWins;
           let newDraws = prevStats.draws;
-          if (currentWinner === 'X') newXWins++;
-          else if (currentWinner === 'O') newOWins++;
-          else if (currentWinner === 'Draw') newDraws++;
+          if (currentWinnerInfo.winner === 'X') newXWins++;
+          else if (currentWinnerInfo.winner === 'O') newOWins++;
+          else if (currentWinnerInfo.winner === 'Draw') newDraws++;
           return { xWins: newXWins, oWins: newOWins, draws: newDraws, total: newTotal };
         });
       }
     }
-  }, [board, winner, gameMode, triggerLearning]); // Dependencies
+  }, [board, winnerInfo.winner, gameMode, triggerLearning]); // Depend on winnerInfo.winner
 
   // --- Effect for AI Move (Player vs AI) ---
   useEffect(() => {
-    if (gameMode === 'playerVsAi' && currentPlayer === 'O' && !winner && isThinking) {
+    // Use winnerInfo.winner to check game state
+    // Trigger AI move if it's 'O's turn
+    if (gameMode === 'playerVsAi' && currentPlayer === 'O' && !winnerInfo.winner && isThinking) {
       setError(null);
       const fetchAiMove = async () => {
         // console.log("AI's turn (Player vs AI)"); // Debug log
@@ -166,8 +172,8 @@ export default function Home() {
           } else {
              // AI returned null move, likely game already ended but state not updated?
              console.warn("AI returned null move. Checking board state:", board);
-             const currentWinner = calculateWinner(board);
-             if (!currentWinner) {
+             const currentWinnerCheck = calculateWinner(board); // Use updated function
+             if (!currentWinnerCheck.winner) {
                  setError("AI error: Could not determine move.");
              }
           }
@@ -176,21 +182,27 @@ export default function Home() {
           setError(err instanceof Error ? err.message : "Failed to connect to AI service.");
         } finally {
           // Only stop thinking if no winner yet (winner effect handles it otherwise)
-          if (!calculateWinner(board)) {
+          if (!calculateWinner(board).winner) { // Use updated function
               setIsThinking(false);
           }
         }
       };
 
-      // Add delay for UX
-      const timer = setTimeout(fetchAiMove, 500);
+      // Add delay for UX, slightly longer if AI starts to allow UI update
+      const delay = board.every(cell => cell === null) ? 750 : 500; // Longer delay if board is empty (AI starting)
+      const timer = setTimeout(fetchAiMove, delay);
       return () => clearTimeout(timer);
     }
-  }, [gameMode, currentPlayer, winner, board, isThinking]); // Dependencies
+    // Clear thinking state if it's Player's turn ('X') but thinking was somehow true
+    else if (gameMode === 'playerVsAi' && currentPlayer === 'X' && isThinking) {
+        setIsThinking(false);
+    }
+  }, [gameMode, currentPlayer, winnerInfo.winner, board, isThinking]); // Dependencies
 
   // --- Effect for AI Self-Play Loop ---
   useEffect(() => {
-    if (gameMode === 'selfPlay' && selfPlayState === 'playing' && !winner && isThinking) {
+    // Use winnerInfo.winner to check game state
+    if (gameMode === 'selfPlay' && selfPlayState === 'playing' && !winnerInfo.winner && isThinking) {
       setError(null);
       const fetchAiMove = async () => {
         // console.log(`AI Self-Play: ${currentPlayer}'s turn`); // Debug log
@@ -217,8 +229,8 @@ export default function Home() {
           } else {
              // AI returned null move in self-play
              console.warn("Self-Play AI returned null move. Board:", board);
-             const currentWinner = calculateWinner(board);
-             if (!currentWinner) {
+             const currentWinnerCheck = calculateWinner(board); // Use updated function
+             if (!currentWinnerCheck.winner) {
                  setError("AI error: Could not determine move during self-play.");
                  setSelfPlayState('gameOver'); // Halt on error
                  setIsThinking(false);
@@ -238,7 +250,7 @@ export default function Home() {
       const timer = setTimeout(fetchAiMove, SELF_PLAY_DELAY);
       return () => clearTimeout(timer);
     }
-  }, [gameMode, selfPlayState, currentPlayer, winner, board, isThinking]); // Dependencies
+  }, [gameMode, selfPlayState, currentPlayer, winnerInfo.winner, board, isThinking]); // Depend on winnerInfo.winner
 
   // --- Initial AI Status Fetch ---
   useEffect(() => {
@@ -248,8 +260,13 @@ export default function Home() {
   // --- Handle Player Click ---
   const handleCellClick = (index: number) => {
     // Ignore click if not player's turn, cell filled, game over, thinking, or in self-play
-    if (gameMode !== 'playerVsAi' || currentPlayer !== 'X' || board[index] || winner || isThinking) {
+    if (gameMode !== 'playerVsAi' || currentPlayer !== 'X' || board[index] || winnerInfo.winner || isThinking) {
       return;
+    }
+
+    // Mark game as started on first player move in PlayerVsAi mode
+    if (!gameStarted && gameMode === 'playerVsAi') {
+      setGameStarted(true);
     }
 
     const newBoard = [...board];
@@ -257,8 +274,8 @@ export default function Home() {
     setBoard(newBoard);
     setError(null);
 
-    const currentWinner = calculateWinner(newBoard);
-    if (!currentWinner) {
+    const currentWinnerCheck = calculateWinner(newBoard); // Use updated function
+    if (!currentWinnerCheck.winner) {
       setCurrentPlayer('O'); // Switch to AI's turn
       setIsThinking(true); // Signal AI should think
     }
@@ -268,22 +285,34 @@ export default function Home() {
   // --- Reset Game Function ---
   const resetGame = (switchToPlayerVsAi = true) => {
     setBoard(Array(9).fill(null));
-    setWinner(null);
-    setCurrentPlayer('X'); // Player 'X' always starts
+    setWinnerInfo({ winner: null, line: null }); // Reset winner info
     setError(null);
-    setIsThinking(false);
+    setIsThinking(false); // Ensure thinking is false initially
+
     if (switchToPlayerVsAi) {
       setGameMode('playerVsAi');
       setSelfPlayState('idle');
       setSelfPlayRounds(0); // Reset self-play counter
-      // Reset self-play stats when switching back to player mode <-- Reset here
       setSelfPlayStats({ xWins: 0, oWins: 0, draws: 0, total: 0 });
+      setGameStarted(false); // Reset game started state for Player vs AI mode
+
+      // --- Alternating Starter Logic ---
+      setCurrentPlayer(nextStarter); // Set the starting player for this round
+      const nextGameStarter = nextStarter === 'X' ? 'O' : 'X'; // Determine who starts the *next* round
+      setNextStarter(nextGameStarter); // Update state for the next round
+
+      // If AI ('O') is starting this round, set thinking to true to trigger its move
+      if (nextStarter === 'O') {
+        setIsThinking(true);
+      }
+      // --- End Alternating Starter Logic ---
+
     } else {
       // Resetting for another round of self-play
       setGameMode('selfPlay');
       setSelfPlayState('playing');
+      setCurrentPlayer('X'); // Self-play always starts with 'X' for consistency
       setIsThinking(true); // Start the self-play loop again
-      // Don't reset stats here, only when starting a *new* session via startSelfPlay
     }
     // Score persists across playerVsAi games
     // Fetch status on reset to show latest AI state
@@ -300,8 +329,12 @@ export default function Home() {
 
   // --- Determine Game Status Message ---
   let status;
+  const winner = winnerInfo.winner; // Use the winner from winnerInfo
+  const winningLine = winnerInfo.line; // Use the line from winnerInfo
+  const isBoardEmpty = board.every(cell => cell === null); // Check if board is empty
+
   if (error) {
-    status = `Error: ${error}`;
+    status = <span className="text-red-500 font-semibold">Error: {error}</span>;
   } else if (gameMode === 'selfPlay') {
     if (selfPlayState === 'playing') {
       status = `AI Self-Play: Round ${selfPlayRounds + 1} (${currentPlayer}'s turn)`;
@@ -312,27 +345,54 @@ export default function Home() {
     }
   } else { // Player vs AI mode
     if (winner) {
-      status = winner === 'Draw' ? 'It\'s a Draw!' : `Winner: ${winner}`;
+      if (winner === 'Draw') {
+        status = <span className="font-bold text-yellow-500">It's a Draw!</span>;
+      } else if (winner === 'X') {
+        status = <span className="font-bold text-green-500">You Win! (X)</span>;
+      } else { // winner === 'O'
+        status = <span className="font-bold text-red-500">AI Wins! (O)</span>;
+      }
     } else {
-      status = `Next player: ${currentPlayer}`;
+      // Clearer turn indicator, with special message if AI starts
+      if (currentPlayer === 'O' && isBoardEmpty) {
+        status = (
+          <span>
+            AI starts this round (O)
+          </span>
+        );
+      } else {
+        status = (
+          <span>
+            {currentPlayer === 'X' ? 'Your Turn (X)' : "AI's Turn (O)"}
+          </span>
+        );
+      }
     }
   }
-  // Add thinking indicator
+  // Add thinking indicator (will append to the status set above)
   if (isThinking && !winner && !error) {
-     status += ' (Thinking...)';
+     status = <span>{status} <span className="italic text-gray-400">(Thinking...)</span></span>;
   }
 
 
   // --- AI Status Indicators ---
   let difficultyIndicator = "Difficulty: Learning...";
   let knowledgeIndicator = "Knowledge Score: Learning...";
-  let learningRateIndicator = "Learning Rate: Learning..."; // <-- New indicator
+  let learningRateIndicator = "Learning Rate: Learning...";
+  let aiStrengthDescription = "Assessing AI capabilities..."; // Placeholder text
 
   if (aiStatus) {
     // Difficulty (Epsilon)
-    if (aiStatus.epsilon < 0.15) difficultyIndicator = "Difficulty: Hard";
-    else if (aiStatus.epsilon < 0.5) difficultyIndicator = "Difficulty: Medium";
-    else difficultyIndicator = "Difficulty: Easy";
+    if (aiStatus.epsilon < 0.15) {
+        difficultyIndicator = "Difficulty: Hard";
+        aiStrengthDescription = "AI is highly optimized. Prepare for a tough match!";
+    } else if (aiStatus.epsilon < 0.5) {
+        difficultyIndicator = "Difficulty: Medium";
+        aiStrengthDescription = "AI offers a balanced challenge.";
+    } else {
+        difficultyIndicator = "Difficulty: Easy";
+        aiStrengthDescription = "AI is actively exploring and learning.";
+    }
     difficultyIndicator += ` (ε: ${aiStatus.epsilon.toFixed(3)})`;
 
     // Knowledge Score (Q-Table Size)
@@ -343,20 +403,20 @@ export default function Home() {
 
     // Learning Rate (Avg Q Change)
     if (aiStatus.avg_q_change !== null) {
-      // Use scientific notation for small values, fixed for larger ones
       const avgChange = aiStatus.avg_q_change;
       const formattedChange = avgChange < 0.0001 && avgChange !== 0
                               ? avgChange.toExponential(2)
                               : avgChange.toFixed(5);
       learningRateIndicator = `Learning Rate: ${formattedChange}`;
     } else {
-      learningRateIndicator = "Learning Rate: N/A"; // Before first learn
+      learningRateIndicator = "Learning Rate: N/A";
     }
 
   } else if (!error) {
      difficultyIndicator = 'Difficulty: Fetching...';
      knowledgeIndicator = 'Knowledge Score: Fetching...';
-     learningRateIndicator = 'Learning Rate: Fetching...'; // <-- Placeholder
+     learningRateIndicator = 'Learning Rate: Fetching...';
+     // aiStrengthDescription remains "Assessing AI capabilities..."
   }
 
   const currentYear = new Date().getFullYear();
@@ -369,10 +429,10 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-8 font-[family-name:var(--font-geist-sans)]">
       <div className="flex flex-col items-center justify-center flex-grow w-full max-w-md">
-        <h1 className="text-4xl font-bold mb-4">Tic-my-Toe</h1> {/* Reduced margin */}
+        <h1 className="text-4xl font-bold mb-4">Tic-my-Toe</h1>
 
         {/* Game Status */}
-        <div className={`mb-1 text-xl h-6 text-center ${error ? 'text-red-500' : ''}`}> {/* Centered text */}
+        <div className={`mb-1 text-xl h-8 flex items-center justify-center text-center`}> {/* Increased height slightly */}
           {status}
         </div>
 
@@ -392,46 +452,85 @@ export default function Home() {
            )}
          </div>
 
-        {/* Game Board */}
-        <div className="grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground mb-6">
-          {board.map((cell: string | null, index: number) => (
-            <button
-              key={index}
-              className={`flex items-center justify-center border border-foreground text-4xl font-bold hover:bg-foreground/10
-                          ${cell === 'X' ? 'text-blue-400' : 'text-red-400'} // Color X and O
-                          disabled:opacity-60 disabled:cursor-not-allowed`}
-              onClick={() => handleCellClick(index)}
-              // Disable button if cell filled, game over, thinking, or not player's turn in PvP mode
-              disabled={!!cell || !!winner || isThinking || (gameMode === 'playerVsAi' && currentPlayer !== 'X') || gameMode === 'selfPlay'}
-            >
-              {cell || ' '}
-            </button>
-          ))}
+        {/* Game Board - Add conditional styling for game end */}
+        <div className={`grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground mb-6 relative
+                     ${winner === 'Draw' ? 'bg-yellow-500/30 border-yellow-500' : ''}
+                     ${winner && winner !== 'Draw' ? 'opacity-70' : ''} // Dim board slightly on win/loss
+                     `}>
+          {board.map((cell: string | null, index: number) => {
+            // Check if the current cell is part of the winning line
+            const isWinningCell = winningLine?.includes(index) ?? false;
+            // Determine highlight color based on winner
+            const highlightClass = winner === 'X' ? 'bg-green-500/50' : winner === 'O' ? 'bg-red-500/50' : '';
+
+            return (
+              <button
+                key={index}
+                className={`w-full h-full flex items-center justify-center border border-foreground text-4xl font-bold
+                            hover:bg-foreground/10 transition-colors duration-150
+                            ${cell === 'X' ? 'text-blue-400' : cell === 'O' ? 'text-red-400' : ''}
+                            ${isWinningCell ? highlightClass : ''} // Apply highlight to winning cells
+                            disabled:opacity-60 disabled:cursor-not-allowed`}
+                onClick={() => handleCellClick(index)}
+                // Disable button if cell filled, game over, thinking, or not player's turn in PvP mode
+                disabled={!!cell || !!winner || isThinking || (gameMode === 'playerVsAi' && currentPlayer !== 'X') || gameMode === 'selfPlay'}
+              >
+                {cell || <>&nbsp;</>} {/* Use non-breaking space for consistent height */}
+              </button>
+            );
+          })}
+          {/* Conclusion Overlay (Optional but nice) */}
+          {winner && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className={`text-5xl font-extrabold px-4 py-2 rounded shadow-lg
+                               ${winner === 'Draw' ? 'text-yellow-900 bg-yellow-400/80' : ''}
+                               ${winner === 'X' ? 'text-green-900 bg-green-400/80' : ''}
+                               ${winner === 'O' ? 'text-red-900 bg-red-400/80' : ''}
+                              `}>
+                {winner === 'Draw' ? 'DRAW' : `${winner} WINS!`}
+              </span>
+            </div>
+          )}
         </div>
 
          {/* Control Buttons */}
-         <div className="flex flex-wrap justify-center gap-4 mb-6">
-            {/* Show Reset/Play Again in PlayerVsAi mode when game ends or error */}
-            {gameMode === 'playerVsAi' && (winner || error) && (
-              <button
-                onClick={() => resetGame(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              >
-                {error ? 'Reset Game' : 'Play Again?'}
-              </button>
+         <div className="flex flex-wrap justify-center items-center gap-4 mb-6 min-h-[40px]"> {/* Ensure min height */}
+            {/* PlayerVsAi Mode Controls */}
+            {gameMode === 'playerVsAi' && (
+              <>
+                {/* Show Reset/Play Again when game ends or error */}
+                {(winnerInfo.winner || error) && (
+                  <button
+                    onClick={() => resetGame(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  >
+                    {error ? 'Reset Game' : 'Play Again?'}
+                  </button>
+                )}
+
+                {/* Show Button OR Placeholder Text when game is ongoing/starting */}
+                {!winnerInfo.winner && !error && (
+                  <>
+                    {/* Show Start Self-Play button only when idle AND game hasn't started */}
+                    {!isThinking && !gameStarted ? (
+                      <button
+                        onClick={startSelfPlay}
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      >
+                        Let AI Self-Train
+                      </button>
+                    ) : (
+                      /* Placeholder Text when button is hidden during game */
+                      <p className="text-sm text-gray-400 italic px-4 py-2 text-center">
+                        {aiStrengthDescription}
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
             )}
 
-           {/* Show Start Self-Play button only when idle in PlayerVsAi mode */}
-           {gameMode === 'playerVsAi' && !winner && !isThinking && !error && (
-             <button
-               onClick={startSelfPlay}
-               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-             >
-               Let AI Self-Train
-             </button>
-           )}
-
-           {/* Show controls during/after self-play */}
+           {/* Self-Play Mode Controls */}
            {gameMode === 'selfPlay' && selfPlayState === 'gameOver' && (
              <>
                <button
@@ -449,7 +548,6 @@ export default function Home() {
              </>
            )}
          </div>
-
 
         {/* Win Rate Counter (Only for Player vs AI) */}
         {gameMode === 'playerVsAi' && (
