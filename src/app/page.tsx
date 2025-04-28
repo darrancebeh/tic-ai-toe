@@ -30,6 +30,13 @@ function calculateWinner(squares: (string | null)[]): string | null {
 // Define the backend API URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// --- Modify Interface for AI Status ---
+interface AIStatus {
+  epsilon: number;
+  q_table_size: number;
+  initial_state_value: number; // Added field
+}
+
 export default function Home() {
   // Represents the 3x3 board, null = empty, 'X' = player, 'O' = AI
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
@@ -38,6 +45,7 @@ export default function Home() {
   const [score, setScore] = useState({ wins: 0, draws: 0, losses: 0 });
   const [isAiTurn, setIsAiTurn] = useState<boolean>(false); // Track if it's AI's turn
   const [error, setError] = useState<string | null>(null); // State for API errors
+  const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
 
   // --- Effect to Check Winner and Trigger Learning --- 
   useEffect(() => {
@@ -60,14 +68,13 @@ export default function Home() {
             throw new Error(`API Learn Error: ${errorData.detail || response.statusText}`);
           }
           console.log("AI learning triggered successfully.");
+          // --- Fetch updated AI status after learning --- 
+          fetchAIStatus(); // Call function to update status display
         } catch (err) {
           console.error("Failed to trigger AI learning:", err);
-          // Display a non-blocking error, maybe?
-          // setError(err instanceof Error ? err.message : "Failed to trigger AI learning.");
         }
       };
       triggerLearning();
-      // ---------------------------
     }
   }, [board, winner]); // Depend on board and winner state
 
@@ -140,6 +147,31 @@ export default function Home() {
     }
   }, [xIsNext, winner, board, isAiTurn, error]); // Dependencies for the effect
 
+  // --- NEW: Effect to Fetch AI Status Periodically ---
+  const fetchAIStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/ai/status`);
+      if (!response.ok) {
+        throw new Error(`API Status Error: ${response.statusText}`);
+      }
+      const data: AIStatus = await response.json();
+      setAiStatus(data);
+    } catch (err) {
+      console.error("Failed to fetch AI status:", err);
+      // Optionally set an error state or just log it
+    }
+  };
+
+  useEffect(() => {
+    // Fetch status initially
+    fetchAIStatus();
+
+    // Optional: Fetch status periodically (e.g., every 10 seconds)
+    // const intervalId = setInterval(fetchAIStatus, 10000);
+    // return () => clearInterval(intervalId); // Cleanup interval on unmount
+
+  }, []); // Empty dependency array means run once on mount
+
   const handleCellClick = (index: number) => {
     // Ignore click if cell is filled or game is over
     if (board[index] || winner || !xIsNext || isAiTurn) { // Added isAiTurn check
@@ -184,15 +216,52 @@ export default function Home() {
     status = `Next player: ${xIsNext ? 'X' : 'O'}`;
   }
 
+  // --- Modify Difficulty Indicator and Display ---
+  let difficultyIndicator = "Learning...";
+  let efficacyIndicator = ""; // New variable for initial state value interpretation
+  if (aiStatus) {
+    // Epsilon-based difficulty
+    if (aiStatus.epsilon < 0.15) {
+      difficultyIndicator = "Hard";
+    } else if (aiStatus.epsilon < 0.5) {
+      difficultyIndicator = "Medium";
+    } else {
+      difficultyIndicator = "Easy";
+    }
+
+    // Initial State Value interpretation (efficacy)
+    const value = aiStatus.initial_state_value;
+    if (value > 0.7) {
+        efficacyIndicator = "Predicts Win";
+    } else if (value > 0.3) {
+        efficacyIndicator = "Predicts Draw";
+    } else if (value > -0.5) {
+        efficacyIndicator = "Predicts Loss Likely";
+    } else {
+        efficacyIndicator = "Predicts Loss";
+    }
+    efficacyIndicator += ` (V₀=${value.toFixed(3)})`; // Add raw value
+  }
+
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 font-[family-name:var(--font-geist-sans)]">
       <h1 className="text-4xl font-bold mb-8">Tic-my-Toe</h1>
 
       {/* Game Status */}
-      <div className={`mb-4 text-xl h-6 ${error ? 'text-red-500' : ''}`}> {/* Style error message */}
+      <div className={`mb-1 text-xl h-6 ${error ? 'text-red-500' : ''}`}> {/* Adjusted margin */}
         {status}
-        {!error && !winner && isAiTurn && <span> (AI thinking...)</span>} {/* Show AI thinking status */}
+        {!error && !winner && isAiTurn && <span> (AI thinking...)</span>}
       </div>
+       {/* AI Status Display */}
+       <div className="mb-4 text-sm text-gray-500 h-5 flex flex-wrap justify-center gap-x-4">
+         <span>{aiStatus ? `Difficulty: ${difficultyIndicator} (ε: ${aiStatus.epsilon.toFixed(3)})` : 'Fetching AI status...'}</span>
+         {aiStatus && <span>|</span>}
+         {aiStatus && <span>Efficacy: {efficacyIndicator}</span>}
+         {aiStatus && <span>|</span>}
+         {aiStatus && <span>States: {aiStatus.q_table_size}</span>}
+       </div>
+
 
       {/* Game Board */}
       <div className="grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground">

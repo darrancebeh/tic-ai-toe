@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 # Import the Q-learning agent and the winner check function
-from q_learning import QLearningAgent, calculate_winner_py # Updated import
+from q_learning import QLearningAgent, calculate_winner_py, State # Import State type
 
 app = FastAPI()
 
@@ -34,7 +34,24 @@ class GameResult(BaseModel):
     board: List[Optional[str]]
     winner: Optional[str] # 'X', 'O', or 'Draw'
 
+# --- Modify AI Status Model ---
+class AIStatus(BaseModel):
+    epsilon: float
+    q_table_size: int
+    initial_state_value: float # Added field
+
 # --- API Endpoints ---
+
+@app.get("/ai/status", response_model=AIStatus)
+def get_ai_status():
+    """Returns the current status of the AI agent."""
+    # Calculate the initial state value using the agent's method
+    initial_value = agent.get_initial_state_value()
+    return AIStatus(
+        epsilon=agent.epsilon,
+        q_table_size=len(agent.q_table),
+        initial_state_value=initial_value
+    )
 
 @app.post("/ai/move")
 def get_ai_move(state: BoardState):

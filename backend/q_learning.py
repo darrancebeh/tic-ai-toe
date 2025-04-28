@@ -25,14 +25,14 @@ def calculate_winner_py(squares: List[Optional[str]]) -> Optional[str]:
 
 class QLearningAgent:
     def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.9, epsilon_decay=0.995, epsilon_min=0.05, q_table_file='q_table.json'):
-        self.alpha = alpha  # Learning rate
-        self.gamma = gamma  # Discount factor
-        self.epsilon = epsilon  # Exploration rate
-        self.epsilon_decay = epsilon_decay # Rate at which epsilon decreases
-        self.epsilon_min = epsilon_min # Minimum exploration rate
+        self.alpha = alpha
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
         self.q_table_file = q_table_file
         self.q_table: QTable = self.load_q_table()
-        self._memory: List[Tuple[State, int]] = [] # Stores (state, action) pairs for the current game
+        self._memory: List[Tuple[State, int]] = []
 
     def state_to_tuple(self, board: List[Optional[str]]) -> State:
         """Converts the board list to an immutable tuple for use as a dictionary key."""
@@ -76,6 +76,24 @@ class QLearningAgent:
     def get_q_value(self, state: State, action: int) -> float:
         """Gets the Q-value for a state-action pair, defaulting to 0."""
         return self.q_table.get(state, {}).get(action, 0.0)
+
+    def get_initial_state_value(self) -> float:
+        """Calculates the maximum Q-value for the initial empty board state."""
+        initial_state: State = ('', '', '', '', '', '', '', '', '') # Empty board tuple
+        available_actions = list(range(9)) # All spots are available initially
+
+        if not self.q_table.get(initial_state):
+            # If the initial state hasn't been encountered or learned from yet
+            return 0.0 # Default to 0 before learning
+
+        # Get Q-values for all possible first moves from the empty state
+        q_values = [self.get_q_value(initial_state, action) for action in available_actions]
+
+        if not q_values:
+             return 0.0 # Should not happen, but safety check
+
+        # Return the maximum Q-value, representing the AI's expected outcome
+        return max(q_values)
 
     def get_available_actions(self, board: List[Optional[str]]) -> List[int]:
         """Returns a list of indices of empty cells."""
