@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { FiGithub, FiLinkedin, FiTwitter, FiMail } from 'react-icons/fi'; // Import icons directly
 
 // Helper function to calculate the winner
 function calculateWinner(squares: (string | null)[]): string | null {
@@ -37,6 +38,7 @@ interface AIStatus {
   initial_state_value: number; // Added field
 }
 
+
 export default function Home() {
   // Represents the 3x3 board, null = empty, 'X' = player, 'O' = AI
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
@@ -47,13 +49,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null); // State for API errors
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
 
-  // --- Effect to Check Winner and Trigger Learning --- 
+  // --- Effect to Check Winner and Trigger Learning ---
   useEffect(() => {
     const currentWinner = calculateWinner(board);
     if (currentWinner && !winner) { // Check if winner changed from null
       setWinner(currentWinner);
 
-      // --- Trigger AI Learning --- 
+      // --- Trigger AI Learning ---
       const triggerLearning = async () => {
         try {
           const response = await fetch(`${API_URL}/ai/learn`, {
@@ -68,7 +70,7 @@ export default function Home() {
             throw new Error(`API Learn Error: ${errorData.detail || response.statusText}`);
           }
           console.log("AI learning triggered successfully.");
-          // --- Fetch updated AI status after learning --- 
+          // --- Fetch updated AI status after learning ---
           fetchAIStatus(); // Call function to update status display
         } catch (err) {
           console.error("Failed to trigger AI learning:", err);
@@ -78,7 +80,7 @@ export default function Home() {
     }
   }, [board, winner]); // Depend on board and winner state
 
-  // --- Score Update Effect --- 
+  // --- Score Update Effect ---
   useEffect(() => {
     if (winner) {
       setScore(prevScore => {
@@ -243,56 +245,114 @@ export default function Home() {
     efficacyIndicator += ` (V₀=${value.toFixed(3)})`; // Add raw value
   }
 
+  const currentYear = new Date().getFullYear(); // Get current year for footer
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 font-[family-name:var(--font-geist-sans)]">
-      <h1 className="text-4xl font-bold mb-8">Tic-my-Toe</h1>
+    // Modify main container for flex layout to push footer down
+    <main className="flex min-h-screen flex-col items-center justify-between p-8 font-[family-name:var(--font-geist-sans)]">
+      {/* Wrap main game content */}
+      <div className="flex flex-col items-center justify-center flex-grow">
+        <h1 className="text-4xl font-bold mb-8">Tic-my-Toe</h1>
 
-      {/* Game Status */}
-      <div className={`mb-1 text-xl h-6 ${error ? 'text-red-500' : ''}`}> {/* Adjusted margin */}
-        {status}
-        {!error && !winner && isAiTurn && <span> (AI thinking...)</span>}
+        {/* Game Status */}
+        <div className={`mb-1 text-xl h-6 ${error ? 'text-red-500' : ''}`}> {/* Adjusted margin */}
+          {status}
+          {!error && !winner && isAiTurn && <span> (AI thinking...)</span>}
+        </div>
+         {/* AI Status Display */}
+         <div className="mb-4 text-sm text-gray-500 h-5 flex flex-wrap justify-center gap-x-4">
+           <span>{aiStatus ? `Difficulty: ${difficultyIndicator} (ε: ${aiStatus.epsilon.toFixed(3)})` : 'Fetching AI status...'}</span>
+           {aiStatus && <span>|</span>}
+           {aiStatus && <span>Efficacy: {efficacyIndicator}</span>}
+           {aiStatus && <span>|</span>}
+           {aiStatus && <span>States: {aiStatus.q_table_size}</span>}
+         </div>
+
+
+        {/* Game Board */}
+        <div className="grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground">
+          {board.map((cell: string | null, index: number) => (
+            <button
+              key={index}
+              className="flex items-center justify-center border border-foreground text-4xl font-bold hover:bg-foreground/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => handleCellClick(index)}
+              // Disable button if cell is filled, game over, or it's AI's turn
+              disabled={!!cell || !!winner || !xIsNext || isAiTurn} // Added isAiTurn check
+            >
+              {cell || '\u00A0'} {/* Render non-breaking space if cell is null */}
+            </button>
+          ))}
+        </div>
+
+         {/* Reset Button */}
+         {(winner || error) && ( // Show reset button also on error
+           <button
+             onClick={resetGame}
+             className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700"
+           >
+             {error ? 'Reset Game' : 'Play Again?'}
+           </button>
+         )}
+
+        {/* Win Rate Counter */}
+        <div className="mt-8 text-center">
+          <h2 className="text-2xl mb-2">Score</h2>
+          <p>Wins: {score.wins} | Draws: {score.draws} | Losses: {score.losses}</p>
+        </div>
       </div>
-       {/* AI Status Display */}
-       <div className="mb-4 text-sm text-gray-500 h-5 flex flex-wrap justify-center gap-x-4">
-         <span>{aiStatus ? `Difficulty: ${difficultyIndicator} (ε: ${aiStatus.epsilon.toFixed(3)})` : 'Fetching AI status...'}</span>
-         {aiStatus && <span>|</span>}
-         {aiStatus && <span>Efficacy: {efficacyIndicator}</span>}
-         {aiStatus && <span>|</span>}
-         {aiStatus && <span>States: {aiStatus.q_table_size}</span>}
-       </div>
 
+      {/* Inlined Footer */}
+      <footer
+        className="w-full py-4 px-4 sm:px-8 bg-opacity-50 text-gray-400 text-sm font-[family-name:var(--font-geist-mono)] border-t border-gray-800"
+      >
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
+          {/* Social Links */}
+          <div className="flex gap-5">
+            <a
+              href="https://github.com/darrancebeh"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub Profile"
+              className="transition-colors duration-300 hover:text-gray-200"
+            >
+              <FiGithub className="w-5 h-5" />
+            </a>
+            <a
+              href="https://linkedin.com/in/darrancebeh"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn Profile"
+              className="transition-colors duration-300 hover:text-gray-200"
+            >
+              <FiLinkedin className="w-5 h-5" />
+            </a>
+            <a
+              href="https://x.com/quant_in_my"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="X Profile"
+              className="transition-colors duration-300 hover:text-gray-200"
+            >
+              <FiTwitter className="w-5 h-5" />
+            </a>
+            <a
+              href="mailto:darrancebeh@gmail.com"
+              aria-label="Send Email"
+              className="transition-colors duration-300 hover:text-gray-200"
+            >
+              <FiMail className="w-5 h-5" />
+            </a>
+          </div>
 
-      {/* Game Board */}
-      <div className="grid grid-cols-3 gap-2 w-64 h-64 border-2 border-foreground">
-        {board.map((cell: string | null, index: number) => (
-          <button
-            key={index}
-            className="flex items-center justify-center border border-foreground text-4xl font-bold hover:bg-foreground/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => handleCellClick(index)}
-            // Disable button if cell is filled, game over, or it's AI's turn
-            disabled={!!cell || !!winner || !xIsNext || isAiTurn} // Added isAiTurn check
-          >
-            {cell || '\u00A0'} {/* Render non-breaking space if cell is null */}
-          </button>
-        ))}
-      </div>
-
-       {/* Reset Button */}
-       {(winner || error) && ( // Show reset button also on error
-         <button
-           onClick={resetGame}
-           className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700"
-         >
-           {error ? 'Reset Game' : 'Play Again?'}
-         </button>
-       )}
-
-      {/* Win Rate Counter */}
-      <div className="mt-8 text-center">
-        <h2 className="text-2xl mb-2">Score</h2>
-        <p>Wins: {score.wins} | Draws: {score.draws} | Losses: {score.losses}</p>
-      </div>
+          {/* Copyright */}
+          <div className="text-center sm:text-right">
+            <p>&copy; {currentYear} Darrance Beh Heng Shek. All Rights Reserved.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Built with Next.js, React, TypeScript, and Tailwind CSS.
+            </p>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
