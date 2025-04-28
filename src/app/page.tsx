@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react'; // Add useRef
-import { FiGithub, FiLinkedin, FiTwitter, FiMail } from 'react-icons/fi';
+import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo } from 'react-icons/fi'; // Add FiInfo icon
 
 // --- Define type for winner result ---
 interface WinnerInfo {
@@ -40,6 +40,177 @@ interface AIStatus {
   avg_q_change: number | null; // <-- RE-ADD field
 }
 
+// --- AI Metrics Guide Component ---
+interface AIMetricsGuideProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-white">Understanding AI Metrics</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+        
+        <div className="p-6">
+          <section className="mb-8">
+            <h3 className="text-lg font-semibold mb-3 text-purple-400">AI Difficulty Scale</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-800">
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Difficulty</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Epsilon (ε)</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Win Chance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3 text-green-400 font-medium">Beginner</td>
+                    <td className="p-3">0.7 - 0.9</td>
+                    <td className="p-3 text-sm">AI is mostly exploring random moves and building a basic understanding of the game. Player victory is very likely.</td>
+                    <td className="p-3">70-90% with strategic play</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3 text-blue-400 font-medium">Intermediate</td>
+                    <td className="p-3">0.5 - 0.7</td>
+                    <td className="p-3 text-sm">AI balances exploration with some strategy it adapted and recognizes some basic patterns. Player victory is still very likely.</td>
+                    <td className="p-3">50-70% for experienced players</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3 text-yellow-400 font-medium">Advanced</td>
+                    <td className="p-3">0.3 - 0.5</td>
+                    <td className="p-3 text-sm">AI has adapted to only make occasional errors and will capitalize on player mistakes. Player victory can still be likely with best moves.</td>
+                    <td className="p-3">30-50% even with good strategy</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3 text-orange-400 font-medium">Expert</td>
+                    <td className="p-3">0.15 - 0.3</td>
+                    <td className="p-3 text-sm">AI has mastered most possible patterns and rarely makes errors with nearly optimal moves. Player victory is unlikely now, with draws being the common outcome.</td>
+                    <td className="p-3">10-20% for very skilled players</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 text-red-400 font-medium">The Great Toe</td>
+                    <td className="p-3">&lt; 0.15</td>
+                    <td className="p-3 text-sm">AI now plays practically perfect Tic-tac-toe. For a simple game like Tic-tac-toe, this approaches unbeatable play. Player victory is practically impossible. Best moves must be consistently made to secure a draw.</td>
+                    <td className="p-3">0-5% (draws are the best outcome)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-gray-400 italic">Note: Lower epsilon (ε) values mean the AI relies more on learned strategy rather than random exploration.</p>
+          </section>
+          
+          <section className="mb-8">
+            <h3 className="text-lg font-semibold mb-3 text-purple-400">Knowledge Score</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-800">
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Score Range</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Q-Table Size</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">0-20</td>
+                    <td className="p-3">0-1,100 states</td>
+                    <td className="p-3 text-sm">AI has minimal knowledge of the game and patterns, and has encountered only a small fraction of possible board states.</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">21-40</td>
+                    <td className="p-3">1,101-2,200 states</td>
+                    <td className="p-3 text-sm">AI has developed some basic understanding of common positions now, but still lacking any strategic depth.</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">41-60</td>
+                    <td className="p-3">2,201-3,300 states</td>
+                    <td className="p-3 text-sm">AI now has moderate experience across many different board states and understands basic winning patterns.</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">61-80</td>
+                    <td className="p-3">3,301-4,400 states</td>
+                    <td className="p-3 text-sm">AI has extensive knowledge of most common game variations and has developed strong patterns and strategies. AI playing best moves is now the norm.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3">81-100</td>
+                    <td className="p-3">4,401-5,478+ states</td>
+                    <td className="p-3 text-sm">AI has comprehensive knowledge of virtually all possible game states. At this level, all AI moves are practically the best possible moves.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-gray-400 italic">Note: Tic-tac-toe has 5,478 possible unique board states when accounting for symmetry. The AI becomes stronger as it learns more states.</p>
+          </section>
+          
+          <section className="mb-4">
+            <h3 className="text-lg font-semibold mb-3 text-purple-400">Learning Rate</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-800">
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Avg. Q Change</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Learning Stage</th>
+                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">≥ 0.1</td>
+                    <td className="p-3">Rapid Learning</td>
+                    <td className="p-3 text-sm">AI is making major adjustments to its strategy and exploring patterns and board moves.</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">0.01 - 0.099</td>
+                    <td className="p-3">Active Learning</td>
+                    <td className="p-3 text-sm">AI is starting to refine its understanding of different positions.</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="p-3">0.001 - 0.009</td>
+                    <td className="p-3">Fine Tuning</td>
+                    <td className="p-3 text-sm">AI is making small adjustments and optimizing its play in its strategy.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3">&lt; 0.001</td>
+                    <td className="p-3">Converging</td>
+                    <td className="p-3 text-sm">AI's strategy is stabilizing as it approaches practically optimal play. Extremely small adjustments indicate the AI has practically mastered the game.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-gray-400 italic">Note: As learning rate approaches zero, the AI has essentially "solved" the game and further training produces diminishing returns.</p>
+          </section>
+
+          <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+            <h4 className="font-semibold text-yellow-400 mb-2 flex items-center gap-2">
+              <FiInfo size={18} /> Important Note on Tic-Tac-Toe Difficulty
+            </h4>
+            <p className="text-sm text-gray-300">
+              Tic-tac-toe is a "solved game" with perfect play. With sufficient training, an AI can learn the perfect strategy that guarantees at least a draw against any opponent.
+            </p>
+            <p className="text-sm text-gray-300 mt-2">
+              At the highest difficulty level (The Great Toe), the AI has essentially solved the game and becomes virtually unbeatable. The best possible outcome for a human player against a fully trained AI is a draw, which even then requires perfect play with all best moves. Any mistake against an optimal AI will result in a loss.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function Home() {
   // --- Core Game State ---
@@ -55,6 +226,8 @@ export default function Home() {
   // --- UI & Interaction State ---
   const [error, setError] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState<boolean>(false); // General thinking/loading indicator
+  const [showMetricsGuide, setShowMetricsGuide] = useState<boolean>(false); // State for metrics guide modal
+
   // --- States for Batch Training Visualization ---
   const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false); // State for batch training loading
   const [isVisualizingBatch, setIsVisualizingBatch] = useState<boolean>(false); // State for visual simulation
@@ -632,19 +805,28 @@ export default function Home() {
 
          {/* AI Status Display */}
          <div className="mb-4 text-sm text-gray-400 h-auto min-h-[4rem] flex flex-col items-center text-center gap-y-1"> {/* Increased min-height */}
-           {/* Display Difficulty (Epsilon) */}
-           <div>{difficultyIndicator}</div>
-           {/* Display Knowledge Score */}
-           <div>{knowledgeIndicator}</div>
-           {/* Display Learning Rate (Avg Q Change) */}
-           <div>{learningRateIndicator}</div> {/* <-- Add new indicator display */}
-           {/* Display Self-Play Stats */}
-           {selfPlayStats.total > 0 && (
-             <div className="mt-1 text-xs">
-               Self-Play ({selfPlayStats.total} rounds): X Wins: {xWinPercent}% | O Wins: {oWinPercent}% | Draws: {drawPercent}%
+             {/* Metrics Guide Button */}
+             <div className="flex items-center justify-center mb-1">
+               <button 
+                 className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                 onClick={() => setShowMetricsGuide(true)}
+               >
+                 <FiInfo size={14} /> Understanding our Toe AI Metrics
+               </button>
              </div>
-           )}
-         </div>
+             {/* Display Difficulty (Epsilon) */}
+             <div>{difficultyIndicator}</div>
+             {/* Display Knowledge Score */}
+             <div>{knowledgeIndicator}</div>
+             {/* Display Learning Rate (Avg Q Change) */}
+             <div>{learningRateIndicator}</div>
+             {/* Display Self-Play Stats */}
+             {selfPlayStats.total > 0 && (
+               <div className="mt-1 text-xs">
+                 Self-Play ({selfPlayStats.total} rounds): X Wins: {xWinPercent}% | O Wins: {oWinPercent}% | Draws: {drawPercent}%
+               </div>
+             )}
+           </div>
 
         {/* AI Strength Description */}
         {!isVisualizingBatch && (
@@ -770,8 +952,8 @@ export default function Home() {
          {/* Batch Training Disclaimer */}
          {!isVisualizingBatch && (
            <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
-             <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-play games. After training, 
-             the AI will become significantly stronger and may be almost impossible to beat as it optimizes its strategy.
+             <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-trained games (The AI will play against itself repeatedly for 1000 games). After training, 
+             the AI will become significantly refined and may be almost significantly tougher to beat as it drastically optimizes its strategy.
            </div>
          )}
 
@@ -829,6 +1011,12 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* AI Metrics Guide Modal */}
+      <AIMetricsGuide 
+        isOpen={showMetricsGuide} 
+        onClose={() => setShowMetricsGuide(false)} 
+      />
     </main>
   );
 }
