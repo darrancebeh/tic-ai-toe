@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 
-# Import the Q-learning agent
-from q_learning import QLearningAgent
+# Import the Q-learning agent and the winner check function
+from q_learning import QLearningAgent, calculate_winner_py # Updated import
 
 app = FastAPI()
 
@@ -34,25 +34,13 @@ class GameResult(BaseModel):
     board: List[Optional[str]]
     winner: Optional[str] # 'X', 'O', or 'Draw'
 
-# --- Helper function to calculate winner --- 
-def calculate_winner_py(squares: List[Optional[str]]) -> Optional[str]:
-    lines = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8], # rows
-        [0, 3, 6], [1, 4, 7], [2, 5, 8], # columns
-        [0, 4, 8], [2, 4, 6]             # diagonals
-    ]
-    for a, b, c in lines:
-        if squares[a] and squares[a] == squares[b] and squares[a] == squares[c]:
-            return squares[a]
-    if all(s is not None for s in squares):
-        return 'Draw'
-    return None
-
 # --- API Endpoints ---
 
 @app.post("/ai/move")
 def get_ai_move(state: BoardState):
+    """Gets the AI's next move based on the current board state using the Q-learning agent."""
     board = state.board
+    # Use the imported function for checks if needed here, though agent handles it now
     winner = calculate_winner_py(board)
 
     if winner:

@@ -7,6 +7,22 @@ from typing import List, Optional, Tuple, Dict
 State = Tuple[Optional[str], ...]
 QTable = Dict[State, Dict[int, float]]
 
+# --- Helper function to calculate winner --- 
+# (Moved from main.py)
+def calculate_winner_py(squares: List[Optional[str]]) -> Optional[str]:
+    lines = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], # rows
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], # columns
+        [0, 4, 8], [2, 4, 6]             # diagonals
+    ]
+    for a, b, c in lines:
+        if squares[a] and squares[a] == squares[b] and squares[a] == squares[c]:
+            return squares[a]
+    if all(s is not None for s in squares):
+        return 'Draw'
+    return None
+# -----------------------------------------
+
 class QLearningAgent:
     def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.9, epsilon_decay=0.995, epsilon_min=0.05, q_table_file='q_table.json'):
         self.alpha = alpha  # Learning rate
@@ -66,30 +82,50 @@ class QLearningAgent:
         return [i for i, spot in enumerate(board) if spot is None]
 
     def choose_action(self, board: List[Optional[str]]) -> Optional[int]:
-        """Chooses an action using epsilon-greedy strategy."""
-        state = self.state_to_tuple(board)
+        """Chooses an action using rules (win/block) then epsilon-greedy strategy."""
         available_actions = self.get_available_actions(board)
-
         if not available_actions:
             return None # No action possible
 
-        # Exploration vs Exploitation
+        # --- Rule 1: Check for immediate AI win --- 
+        for action in available_actions:
+            temp_board = list(board) # Create a copy
+            temp_board[action] = 'O' # Simulate AI move
+            if calculate_winner_py(temp_board) == 'O':
+                print("AI Debug: Choosing immediate win")
+                state = self.state_to_tuple(board)
+                self._memory.append((state, action))
+                return action
+
+        # --- Rule 2: Check for immediate Player block --- 
+        for action in available_actions:
+            temp_board = list(board)
+            temp_board[action] = 'X' # Simulate Player move
+            if calculate_winner_py(temp_board) == 'X':
+                print("AI Debug: Choosing immediate block")
+                state = self.state_to_tuple(board)
+                self._memory.append((state, action))
+                return action
+
+        # --- Rule 3: Epsilon-Greedy (Existing Logic) --- 
+        state = self.state_to_tuple(board)
         if random.uniform(0, 1) < self.epsilon:
             action = random.choice(available_actions) # Explore
+            print(f"AI Debug: Exploring (Epsilon: {self.epsilon:.3f})")
         else:
             # Exploit: Choose the best known action
-            q_values = {action: self.get_q_value(state, action) for action in available_actions}
+            q_values = {act: self.get_q_value(state, act) for act in available_actions}
             max_q = -float('inf')
-            best_actions = []
-            for action, q in q_values.items():
-                if q > max_q:
-                    max_q = q
-                    best_actions = [action]
-                elif q == max_q:
-                    best_actions.append(action)
-            action = random.choice(best_actions) # Choose randomly among best actions
+            # Handle states with no Q-values yet - default to 0
+            if not any(q != 0.0 for q in q_values.values()):
+                 max_q = 0.0 # If all are 0 (or state is new), treat max as 0
+            else:
+                 max_q = max(q_values.values())
 
-        # Store state and chosen action for learning later
+            best_actions = [act for act, q in q_values.items() if q == max_q]
+            action = random.choice(best_actions) # Choose randomly among best actions
+            print(f"AI Debug: Exploiting (Q-val: {max_q:.3f})")
+
         self._memory.append((state, action))
         return action
 
