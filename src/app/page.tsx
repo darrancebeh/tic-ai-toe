@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react'; // Add useRef
-import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo, FiLoader, FiRotateCcw } from 'react-icons/fi'; // Add FiInfo, FiLoader, FiRotateCcw icons
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo, FiLoader, FiRotateCcw } from 'react-icons/fi';
 
-// --- Define type for winner result ---
 interface WinnerInfo {
   winner: 'X' | 'O' | 'Draw' | null;
   line: number[] | null;
 }
 
-// Helper function to calculate the winner and the winning line
 function calculateWinner(squares: (string | null)[]): WinnerInfo {
   const lines = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
@@ -19,28 +17,24 @@ function calculateWinner(squares: (string | null)[]): WinnerInfo {
   for (let i = 0; i < lines.length; i++) {
     const [a, b, c] = lines[i];
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return { winner: squares[a] as 'X' | 'O', line: lines[i] }; // Return winner and line
+      return { winner: squares[a] as 'X' | 'O', line: lines[i] };
     }
   }
-  // Check for draw (if no winner and board is full)
   if (squares.every(square => square !== null)) {
     return { winner: 'Draw', line: null };
   }
-  return { winner: null, line: null }; // No winner yet
+  return { winner: null, line: null };
 }
 
-// Define the backend API URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// --- Modify Interface for AI Status --- Include avg_q_change
 interface AIStatus {
   epsilon: number;
   q_table_size: number;
   initial_state_value: number;
-  avg_q_change: number | null; // <-- RE-ADD field
+  avg_q_change: number | null;
 }
 
-// --- AI Metrics Guide Component ---
 interface AIMetricsGuideProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,9 +43,7 @@ interface AIMetricsGuideProps {
 function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
   if (!isOpen) return null;
 
-  // Function to handle backdrop click
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Close only if the click is directly on the backdrop
     if (e.target === e.currentTarget) {
       onClose();
     }
@@ -60,15 +52,14 @@ function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"
-      onClick={handleBackdropClick} // Add backdrop click handler
+      onClick={handleBackdropClick}
     >
       <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-white">Understanding AI Metrics</h2>
           <button 
             onClick={onClose}
-            // Increase size and clickable area
-            className="text-gray-400 hover:text-white transition-colors text-3xl font-bold p-2 -m-2" 
+            className="text-gray-400 hover:text-white transition-colors text-3xl font-bold p-2 -m-2"
             aria-label="Close"
           >
             &times;
@@ -223,8 +214,6 @@ function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
   );
 }
 
-
-// --- Simple Confirmation Modal Component ---
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
@@ -271,22 +260,19 @@ function ConfirmModal({
 }
 
 export default function Home() {
-  // --- Core Game State ---
   const [board, setBoard] = useState<(string | null)[]>(Array(9).fill(null));
-  const [winnerInfo, setWinnerInfo] = useState<WinnerInfo>({ winner: null, line: null }); // Store winner and line
-  const [currentPlayer, setCurrentPlayer] = useState<'X' | 'O'>('X'); // Player 'X' starts the very first game
-  const [gameStarted, setGameStarted] = useState<boolean>(false); // Track if the game has started
-  const [nextStarter, setNextStarter] = useState<'X' | 'O'>('O'); // AI ('O') will start the *next* game after the initial one
+  const [winnerInfo, setWinnerInfo] = useState<WinnerInfo>({ winner: null, line: null });
+  const [currentPlayer, setCurrentPlayer] = useState<'X' | 'O'>('X');
+  const [gameStarted, setGameStarted] = useState<boolean>(false);
+  const [nextStarter, setNextStarter] = useState<'X' | 'O'>('O');
 
-  // --- Player vs AI Score ---
   const [score, setScore] = useState({ wins: 0, draws: 0, losses: 0 });
 
-  // --- UI & Interaction State ---
   const [error, setError] = useState<string | null>(null);
-  const [isThinking, setIsThinking] = useState<boolean>(false); // General thinking/loading indicator
-  const [showMetricsGuide, setShowMetricsGuide] = useState<boolean>(false); // State for metrics guide modal
-  const [isResettingAI, setIsResettingAI] = useState<boolean>(false); // Loading state for Reset AI button
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false); // State for confirmation modal
+  const [isThinking, setIsThinking] = useState<boolean>(false);
+  const [showMetricsGuide, setShowMetricsGuide] = useState<boolean>(false);
+  const [isResettingAI, setIsResettingAI] = useState<boolean>(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [confirmModalProps, setConfirmModalProps] = useState<Omit<ConfirmModalProps, 'isOpen'>>({
     title: '',
     message: '',
@@ -294,21 +280,15 @@ export default function Home() {
     onCancel: () => {},
   });
 
-  // --- States for Batch Training Visualization ---
-  const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false); // State for batch training loading
-  const [isVisualizingBatch, setIsVisualizingBatch] = useState<boolean>(false); // State for visual simulation
-  const [visualBoard, setVisualBoard] = useState<(string | null)[]>(Array(9).fill(null)); // Board for visualization
-  const visualSimulationIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
-  const [trainingProgress, setTrainingProgress] = useState({ current: 0, total: 0, completed: 0 }); // Training progress tracker
+  const [isBatchTraining, setIsBatchTraining] = useState<boolean>(false);
+  const [isVisualizingBatch, setIsVisualizingBatch] = useState<boolean>(false);
+  const [visualBoard, setVisualBoard] = useState<(string | null)[]>(Array(9).fill(null));
+  const visualSimulationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [trainingProgress, setTrainingProgress] = useState({ current: 0, total: 0, completed: 0 });
 
-  // --- AI Status ---
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
 
-  // --- Game Mode & Self-Play State --- REMOVED self-play states
-
-  // --- Fetch AI Status ---
   const fetchAIStatus = useCallback(async () => {
-    // console.log("Fetching AI status..."); // Debug log
     try {
       const response = await fetch(`${API_URL}/ai/status`);
       if (!response.ok) {
@@ -319,13 +299,11 @@ export default function Home() {
     } catch (err) {
       console.error("Failed to fetch AI status:", err);
       setError(err instanceof Error ? err.message : "Failed to connect to AI service.");
-      setAiStatus(null); // Clear status on error
+      setAiStatus(null);
     }
-  }, []); // No dependencies, safe to memoize
+  }, []);
 
-  // --- Trigger AI Learning ---
   const triggerLearning = useCallback(async (finalBoard: (string | null)[], gameWinner: string) => {
-    // console.log(`Triggering learning. Winner: ${gameWinner}`); // Debug log
     try {
       const response = await fetch(`${API_URL}/ai/learn`, {
         method: 'POST',
@@ -336,17 +314,13 @@ export default function Home() {
         const errorData = await response.json();
         throw new Error(`API Learn Error: ${errorData.detail || response.statusText}`);
       }
-      // console.log("AI learning triggered successfully."); // Debug log
-      await fetchAIStatus(); // Fetch updated status after learning
+      await fetchAIStatus();
     } catch (err) {
       console.error("Failed to trigger AI learning:", err);
-      // Don't necessarily set a board error, just log it
     }
-  }, [fetchAIStatus]); // Depends on fetchAIStatus
+  }, [fetchAIStatus]);
 
-  // --- Reset AI Learning ---
   const resetAI = useCallback(async () => {
-    // Use custom modal instead of window.confirm
     setConfirmModalProps({
       title: "Reset AI Learning?",
       message: "Are you sure you want to reset the AI's learning? This will delete all its learned knowledge and reset scores.",
@@ -354,8 +328,8 @@ export default function Home() {
       onConfirm: async () => {
         setShowConfirmModal(false);
         setError(null);
-        setIsResettingAI(true); // Start loading indicator for Reset AI button
-        setIsThinking(true); // Use general thinking state as well
+        setIsResettingAI(true);
+        setIsThinking(true);
         try {
           const response = await fetch(`${API_URL}/ai/reset`, {
             method: 'POST',
@@ -368,9 +342,8 @@ export default function Home() {
           }
           
           const updatedStatus: AIStatus = await response.json();
-          setAiStatus(updatedStatus); // Update with reset AI status
+          setAiStatus(updatedStatus);
           
-          // Reset the game and scores when AI is reset
           setBoard(Array(9).fill(null));
           setWinnerInfo({ winner: null, line: null });
           setScore({ wins: 0, draws: 0, losses: 0 });
@@ -382,8 +355,8 @@ export default function Home() {
           console.error("Failed to reset AI:", err);
           setError(err instanceof Error ? err.message : "Failed to reset AI learning.");
         } finally {
-          setIsResettingAI(false); // Stop loading indicator for Reset AI button
-          setIsThinking(false); // Stop general thinking state
+          setIsResettingAI(false);
+          setIsThinking(false);
         }
       },
       onCancel: () => {
@@ -392,49 +365,39 @@ export default function Home() {
     });
     setShowConfirmModal(true);
 
-  }, []); // Dependencies remain empty
+  }, []);
 
-  // --- Visual Simulation Logic ---
   const runVisualSimulationStep = useCallback(() => {
     setVisualBoard(prevBoard => {
       let currentBoard = [...prevBoard];
-      let winnerInfo = calculateWinner(currentBoard); // Use existing winner logic
+      let winnerInfo = calculateWinner(currentBoard);
 
-      // If game over on visual board, reset for next visual game
       if (winnerInfo.winner) {
         return Array(9).fill(null);
       }
 
-      // Determine next player visually (simple alternation)
       const xCount = currentBoard.filter(c => c === 'X').length;
       const oCount = currentBoard.filter(c => c === 'O').length;
       const nextPlayer = xCount <= oCount ? 'X' : 'O';
 
-      // Find available spots
       const availableSpots = currentBoard
         .map((val, idx) => (val === null ? idx : null))
         .filter(val => val !== null) as number[];
 
       if (availableSpots.length > 0) {
-        // Choose a random available spot
         const randomSpot = availableSpots[Math.floor(Math.random() * availableSpots.length)];
-        
-        // Make only ONE move per simulation step for clearer visibility
         currentBoard[randomSpot] = nextPlayer;
         
-        // Sometimes make strategic moves for more realistic visualization
         if (Math.random() > 0.6) {
-          // Check if there's a winning move for either player
           for (let i = 0; i < availableSpots.length; i++) {
             const testSpot = availableSpots[i];
-            if (testSpot !== randomSpot) { // Don't check the spot we already filled
+            if (testSpot !== randomSpot) {
               const testBoard = [...currentBoard];
               testBoard[testSpot] = nextPlayer;
               const testWinner = calculateWinner(testBoard);
               if (testWinner.winner === nextPlayer) {
-                // Found a winning move, use it instead
-                currentBoard[randomSpot] = null; // Undo the random move
-                currentBoard[testSpot] = nextPlayer; // Make the winning move
+                currentBoard[randomSpot] = null;
+                currentBoard[testSpot] = nextPlayer;
                 break;
               }
             }
@@ -446,15 +409,13 @@ export default function Home() {
     });
   }, []);
 
-  // --- Start/Stop Visual Simulation ---
   const startVisualSimulation = useCallback(() => {
     setIsVisualizingBatch(true);
-    setVisualBoard(Array(9).fill(null)); // Start with empty board
+    setVisualBoard(Array(9).fill(null));
     if (visualSimulationIntervalRef.current) {
       clearInterval(visualSimulationIntervalRef.current);
     }
-    // Much slower animation speed (250ms) to make moves clearly visible
-    visualSimulationIntervalRef.current = setInterval(runVisualSimulationStep, 250); // Changed from 50ms to 250ms
+    visualSimulationIntervalRef.current = setInterval(runVisualSimulationStep, 250);
   }, [runVisualSimulationStep]);
 
   const stopVisualSimulation = useCallback(() => {
@@ -465,7 +426,6 @@ export default function Home() {
     }
   }, []);
 
-  // --- Cleanup interval on unmount ---
   useEffect(() => {
     return () => {
       if (visualSimulationIntervalRef.current) {
@@ -474,21 +434,19 @@ export default function Home() {
     };
   }, []);
 
-  // --- Modify Trigger Batch Training ---
   const triggerBatchTraining = useCallback(async (rounds: number = 1000) => {
-    if (isBatchTraining) return; // Prevent multiple simultaneous requests
+    if (isBatchTraining) return;
 
     console.log(`Triggering batch training for ${rounds} rounds...`);
-    setIsBatchTraining(true); // Start loading indicator (keeps button disabled)
+    setIsBatchTraining(true);
     setTrainingProgress({ current: 0, total: rounds, completed: 0 });
-    startVisualSimulation(); // Start the visual simulation
+    startVisualSimulation();
     setError(null);
 
-    // Define the simulation step size to update the counter
-    const stepSize = Math.max(1, Math.floor(rounds / 50)); // Update roughly 50 times during training
+    const stepSize = Math.max(1, Math.floor(rounds / 50));
     
     try {
-      const startTime = Date.now(); // Track when we started
+      const startTime = Date.now();
       const response = await fetch(`${API_URL}/ai/train_batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -500,7 +458,6 @@ export default function Home() {
         throw new Error(`API Batch Train Error: ${errorData.detail || response.statusText}`);
       }
 
-      // Simulate progress updates while waiting for response
       let progress = 0;
       const progressInterval = setInterval(() => {
         progress += stepSize;
@@ -513,42 +470,35 @@ export default function Home() {
           current: progress,
           completed: Math.floor((progress / rounds) * 100)
         }));
-      }, 50); // Update every 50ms to match the visualization speed
+      }, 50);
 
       const updatedStatus: AIStatus = await response.json();
       
-      // Clean up the progress interval when we get response
       clearInterval(progressInterval);
       
-      // Set the final progress to 100%
       setTrainingProgress(prev => ({ ...prev, current: rounds, completed: 100 }));
       
-      setAiStatus(updatedStatus); // Update status with result from batch training
+      setAiStatus(updatedStatus);
       console.log(`Batch training completed successfully in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 
     } catch (err) {
       console.error("Failed to trigger AI batch training:", err);
       setError(err instanceof Error ? err.message : "Failed during batch training.");
-      // Fetch status even on error to see if anything changed partially
       await fetchAIStatus();
     } finally {
-      // Keep the visualization running for a brief moment to show completion
       setTimeout(() => {
-        setIsBatchTraining(false); // Stop loading indicator
-        stopVisualSimulation(); // Stop the visual simulation
-      }, 1000); // Allow users to see the completed state for 1 second
+        setIsBatchTraining(false);
+        stopVisualSimulation();
+      }, 1000);
     }
   }, [fetchAIStatus, isBatchTraining, startVisualSimulation, stopVisualSimulation]);
 
-  // --- Effect to Check Winner & Handle Game End ---
   useEffect(() => {
     const currentWinnerInfo = calculateWinner(board);
-    // Only trigger on new winner (when winnerInfo.winner was null but now isn't)
     if (currentWinnerInfo.winner && !winnerInfo.winner) {
-      setWinnerInfo(currentWinnerInfo); // Set both winner and line
-      setIsThinking(false); // Stop thinking indicator
+      setWinnerInfo(currentWinnerInfo);
+      setIsThinking(false);
 
-      // Update score only in Player vs AI mode (now the only mode)
       setScore(prevScore => {
         if (currentWinnerInfo.winner === 'X') return { ...prevScore, wins: prevScore.wins + 1 };
         if (currentWinnerInfo.winner === 'O') return { ...prevScore, losses: prevScore.losses + 1 };
@@ -556,19 +506,14 @@ export default function Home() {
         return prevScore;
       });
 
-      // Trigger learning regardless of mode (backend handles reward based on 'O')
       triggerLearning(board, currentWinnerInfo.winner);
     }
   }, [board, winnerInfo.winner, triggerLearning]);
 
-  // --- Effect for AI Move (Player vs AI) ---
   useEffect(() => {
-    // Use winnerInfo.winner to check game state
-    // Trigger AI move if it's 'O's turn
-    if (currentPlayer === 'O' && !winnerInfo.winner && isThinking) { // REMOVED gameMode check
+    if (currentPlayer === 'O' && !winnerInfo.winner && isThinking) {
       setError(null);
       const fetchAiMove = async () => {
-        // console.log("AI's turn (Player vs AI)"); // Debug log
         try {
           const response = await fetch(`${API_URL}/ai/move`, {
             method: 'POST',
@@ -582,15 +527,14 @@ export default function Home() {
           if (aiMoveIndex !== null && typeof aiMoveIndex === 'number' && board[aiMoveIndex] === null) {
             const newBoard = [...board];
             newBoard[aiMoveIndex] = 'O';
-            setBoard(newBoard); // This triggers the winner check effect
-            setCurrentPlayer('X'); // Switch back to player
+            setBoard(newBoard);
+            setCurrentPlayer('X');
           } else if (aiMoveIndex !== null) {
             console.error("AI returned invalid move index:", aiMoveIndex);
             setError("AI error: Invalid move received.");
           } else {
-             // AI returned null move, likely game already ended but state not updated?
              console.warn("AI returned null move. Checking board state:", board);
-             const currentWinnerCheck = calculateWinner(board); // Use updated function
+             const currentWinnerCheck = calculateWinner(board);
              if (!currentWinnerCheck.winner) {
                  setError("AI error: Could not determine move.");
              }
@@ -599,38 +543,31 @@ export default function Home() {
           console.error("Failed to fetch AI move:", err);
           setError(err instanceof Error ? err.message : "Failed to connect to AI service.");
         } finally {
-          // Only stop thinking if no winner yet (winner effect handles it otherwise)
-          if (!calculateWinner(board).winner) { // Use updated function
+          if (!calculateWinner(board).winner) {
               setIsThinking(false);
           }
         }
       };
 
-      // Add delay for UX, slightly longer if AI starts to allow UI update
-      const delay = board.every(cell => cell === null) ? 750 : 500; // Longer delay if board is empty (AI starting)
+      const delay = board.every(cell => cell === null) ? 750 : 500;
       const timer = setTimeout(fetchAiMove, delay);
       return () => clearTimeout(timer);
     }
-    // Clear thinking state if it's Player's turn ('X') but thinking was somehow true
-    else if (currentPlayer === 'X' && isThinking) { // REMOVED gameMode check
+    else if (currentPlayer === 'X' && isThinking) {
         setIsThinking(false);
     }
-  }, [currentPlayer, winnerInfo.winner, board, isThinking]); // REMOVED gameMode from dependencies
+  }, [currentPlayer, winnerInfo.winner, board, isThinking]);
 
-  // --- Initial AI Status Fetch ---
   useEffect(() => {
     fetchAIStatus();
-  }, [fetchAIStatus]); // Run once on mount
+  }, [fetchAIStatus]);
 
-  // --- Handle Player Click ---
   const handleCellClick = (index: number) => {
-    // Ignore click if not player's turn, cell filled, game over, or thinking
-    if (currentPlayer !== 'X' || board[index] || winnerInfo.winner || isThinking) { // REMOVED gameMode checks
+    if (currentPlayer !== 'X' || board[index] || winnerInfo.winner || isThinking) {
       return;
     }
 
-    // Mark game as started on first player move
-    if (!gameStarted) { // REMOVED gameMode check
+    if (!gameStarted) {
       setGameStarted(true);
     }
 
@@ -639,24 +576,19 @@ export default function Home() {
     setBoard(newBoard);
     setError(null);
 
-    const currentWinnerCheck = calculateWinner(newBoard); // Use updated function
+    const currentWinnerCheck = calculateWinner(newBoard);
     if (!currentWinnerCheck.winner) {
-      setCurrentPlayer('O'); // Switch to AI's turn
-      setIsThinking(true); // Signal AI should think
+      setCurrentPlayer('O');
+      setIsThinking(true);
     }
-    // Winner check effect handles game end
   };
 
-  // --- Reset Game Function ---
   const resetGame = () => { 
     setBoard(Array(9).fill(null));
     setWinnerInfo({ winner: null, line: null }); 
     setError(null);
     setIsThinking(false); 
-    // Stop any potential AI thinking from previous game state if reset mid-turn
-    // (No dedicated loading state needed here, button disabled by isThinking/isBatchTraining)
 
-    // --- Alternating Starter Logic ---
     setCurrentPlayer(nextStarter); 
     const nextGameStarter = nextStarter === 'X' ? 'O' : 'X'; 
     setNextStarter(nextGameStarter); 
@@ -664,31 +596,28 @@ export default function Home() {
     if (nextStarter === 'O') {
       setIsThinking(true);
     }
-    // --- End Alternating Starter Logic ---
-    setGameStarted(false); // Reset game started state
+    setGameStarted(false);
 
     fetchAIStatus();
   };
 
-  // --- Determine Game Status Message ---
   let status;
-  const winner = winnerInfo.winner; // Use the winner from winnerInfo
-  const winningLine = winnerInfo.line; // Use the line from winnerInfo
-  const isBoardEmpty = board.every(cell => cell === null); // Check if board is empty
+  const winner = winnerInfo.winner;
+  const winningLine = winnerInfo.line;
+  const isBoardEmpty = board.every(cell => cell === null);
 
   if (error) {
     status = <span className="text-red-500 font-semibold">Error: {error}</span>;
-  } else { // Player vs AI mode (only mode)
+  } else {
     if (winner) {
       if (winner === 'Draw') {
         status = <span className="font-bold text-yellow-500">It's a Draw!</span>;
       } else if (winner === 'X') {
         status = <span className="font-bold text-green-500">You Win! (X)</span>;
-      } else { // winner === 'O'
+      } else {
         status = <span className="font-bold text-red-500">AI Wins! (O)</span>;
       }
     } else {
-      // Clearer turn indicator, with special message if AI starts
       if (currentPlayer === 'O' && isBoardEmpty) {
         status = (
           <span>
@@ -704,20 +633,16 @@ export default function Home() {
       }
     }
   }
-  // Add thinking indicator (will append to the status set above)
   if (isThinking && !winner && !error) {
      status = <span>{status} <span className="italic text-gray-400">(Thinking...)</span></span>;
   }
 
-
-  // --- AI Status Indicators ---
   let difficultyIndicator = "Difficulty: Learning...";
   let knowledgeIndicator = "Knowledge Score: Learning...";
   let learningRateIndicator = "Learning Rate: Learning...";
-  let aiStrengthDescription = "Assessing AI capabilities..."; // Placeholder text
+  let aiStrengthDescription = "Assessing AI capabilities...";
 
   if (aiStatus) {
-    // Difficulty (Epsilon)
     if (aiStatus.epsilon < 0.15) {
         difficultyIndicator = "Difficulty: Hard";
         aiStrengthDescription = "AI is highly optimized. Prepare for a tough match!";
@@ -730,13 +655,11 @@ export default function Home() {
     }
     difficultyIndicator += ` (ε: ${aiStatus.epsilon.toFixed(3)})`;
 
-    // Knowledge Score (Q-Table Size)
     const MAX_EXPECTED_STATES = 5478;
     const qSize = aiStatus.q_table_size;
     const knowledgeScore = Math.min(100, Math.round((qSize / MAX_EXPECTED_STATES) * 100));
     knowledgeIndicator = `Knowledge Score: ${knowledgeScore}`;
 
-    // Learning Rate (Avg Q Change)
     if (aiStatus.avg_q_change !== null) {
       const avgChange = aiStatus.avg_q_change;
       const formattedChange = avgChange < 0.0001 && avgChange !== 0
@@ -751,31 +674,26 @@ export default function Home() {
      difficultyIndicator = 'Difficulty: Fetching...';
      knowledgeIndicator = 'Knowledge Score: Fetching...';
      learningRateIndicator = 'Learning Rate: Fetching...';
-     // aiStrengthDescription remains "Assessing AI capabilities..."
   }
 
   const currentYear = new Date().getFullYear();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-8 font-[family-name:var(--font-geist-sans)]">
+    <main className="flex min-h-screen flex-col items-center justify-between pt-8 px-8 font-[family-name:var(--font-geist-sans)]">
       <div className="flex flex-col items-center justify-center flex-grow w-full max-w-md">
         <h1 className="text-4xl font-bold mb-4">{'{db} Tic-my-Toe'}</h1>
 
-        {/* Game Status */}
-        <div className={`mb-1 text-xl h-8 flex items-center justify-center text-center`}> {/* Increased height slightly */}
+        <div className={`mb-1 text-xl h-8 flex items-center justify-center text-center`}>
           {status}
         </div>
 
-        {/* Score Display */}
         <div className="mb-3 text-sm text-gray-400 flex gap-4 justify-center font-mono">
           <span>Wins: <span className="text-green-400 font-semibold">{score.wins}</span></span>
           <span>Draws: <span className="text-yellow-400 font-semibold">{score.draws}</span></span>
           <span>Losses: <span className="text-red-400 font-semibold">{score.losses}</span></span>
         </div>
 
-         {/* AI Status Display */}
-         <div className="mb-4 text-sm text-gray-400 h-auto min-h-[4rem] flex flex-col items-center text-center gap-y-1"> {/* Increased min-height */}
-             {/* Metrics Guide Button */}
+         <div className="mb-4 text-sm text-gray-400 h-auto min-h-[4rem] flex flex-col items-center text-center gap-y-1">
              <div className="flex items-center justify-center mb-1">
                <button 
                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
@@ -784,26 +702,19 @@ export default function Home() {
                  <FiInfo size={14} /> Understanding our Toe AI Metrics
                </button>
              </div>
-             {/* Display Difficulty (Epsilon) */}
              <div>{difficultyIndicator}</div>
-             {/* Display Knowledge Score */}
              <div>{knowledgeIndicator}</div>
-             {/* Display Learning Rate (Avg Q Change) */}
              <div>{learningRateIndicator}</div>
            </div>
 
-        {/* AI Strength Description */}
         {!isVisualizingBatch && (
           <p className="mb-4 text-sm text-center text-gray-400 italic h-auto min-h-[1.5rem]">
             {aiStrengthDescription}
           </p>
         )}
 
-         {/* Game Board Area */}
          <div className={`w-64 h-64 mb-6 relative`}>
-           {/* Show Visual Simulation OR Actual Game Board */}
            {isVisualizingBatch ? (
-             // Visual Simulation Board
              <div className="grid grid-cols-3 gap-2 w-full h-full border-2 border-purple-500 animate-pulse">
                {visualBoard.map((cell, index) => (
                  <div
@@ -817,7 +728,6 @@ export default function Home() {
                  </div>
                ))}
                <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-black/60">
-                   {/* Added Context Text */} 
                    <p className="text-white text-xs font-semibold bg-black/70 px-2 py-1 rounded shadow">
                     Simulating AI Self-Play...
                    </p>
@@ -846,10 +756,9 @@ export default function Home() {
                </div>
              </div>
            ) : (
-             // Actual Game Board
              <div className={`grid grid-cols-3 gap-2 w-full h-full border-2 border-foreground
                           ${winner === 'Draw' ? 'bg-yellow-500/30 border-yellow-500' : ''}
-                          ${winner && winner !== 'Draw' ? 'opacity-70' : ''} // Dim board slightly on win/loss
+                          ${winner && winner !== 'Draw' ? 'opacity-70' : ''}
                           `}>
                {board.map((cell: string | null, index: number) => {
                  const isWinningCell = winningLine?.includes(index) ?? false;
@@ -863,13 +772,12 @@ export default function Home() {
                                  ${isWinningCell ? highlightClass : ''}
                                  disabled:opacity-60 disabled:cursor-not-allowed`}
                      onClick={() => handleCellClick(index)}
-                     disabled={!!cell || !!winner || isThinking || currentPlayer !== 'X'} // Simplified disabled condition
+                     disabled={!!cell || !!winner || isThinking || currentPlayer !== 'X'}
                    >
                      {cell || <>&nbsp;</>}
                    </button>
                  );
                })}
-               {/* Conclusion Overlay */}
                {winner && (
                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                    <span className={`text-5xl font-extrabold px-4 py-2 rounded shadow-lg
@@ -885,13 +793,11 @@ export default function Home() {
            )}
          </div>
 
-         {/* --- Main Action Buttons --- */}
          {!isVisualizingBatch && (
            <div className="mb-2 flex flex-col sm:flex-row gap-4 items-center justify-center w-full">
-             {/* Batch Training Button */}
              <button
-               onClick={() => triggerBatchTraining(1000)} // Example: 1000 rounds
-               disabled={isBatchTraining || isThinking || isResettingAI} // Disable if training, thinking, or resetting AI
+               onClick={() => triggerBatchTraining(1000)}
+               disabled={isBatchTraining || isThinking || isResettingAI}
                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
              >
                {isBatchTraining ? (
@@ -901,20 +807,17 @@ export default function Home() {
                )}
              </button>
 
-             {/* Reset Game Button */}
              <button
                onClick={resetGame}
-               // Disable if game not started, game over, AI thinking/training/resetting
                disabled={!gameStarted || !!winnerInfo.winner || isThinking || isBatchTraining || isResettingAI}
                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
              >
                <FiRotateCcw /> Reset Game
              </button>
 
-             {/* Reset AI Button */}
              <button
                onClick={resetAI}
-               disabled={isBatchTraining || isThinking || isResettingAI} // Disable if training, thinking, or resetting AI
+               disabled={isBatchTraining || isThinking || isResettingAI}
                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
              >
                {isResettingAI ? (
@@ -926,20 +829,17 @@ export default function Home() {
            </div>
          )}
          
-         {/* Batch Training Disclaimer */}
          <div className="mb-6 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-200 text-center max-w-md">
            <strong>⚠️ Warning:</strong> Batch training simulates thousands of AI self-trained games (The AI will play against itself repeatedly for 1000 games). After training, 
            the AI will become significantly refined and will be significantly tougher to beat as it drastically optimizes its strategy and expands its knowledge context.
          </div>
 
-      </div> {/* End Main Content Container */}
+      </div>
 
-      {/* Footer */}
       <footer
-        className="w-full py-4 px-4 sm:px-8 bg-opacity-50 text-gray-400 text-sm font-[family-name:var(--font-geist-mono)] border-t border-gray-800 mt-auto" // Ensure footer is at bottom
+        className="w-full py-2 px-4 sm:px-8 bg-opacity-50 text-gray-400 text-sm font-[family-name:var(--font-geist-mono)] border-t border-gray-800 mt-auto"
       >
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
-          {/* Social Links */}
           <div className="flex gap-5">
             <a
               href="https://github.com/darrancebeh"
@@ -977,7 +877,6 @@ export default function Home() {
             </a>
           </div>
 
-          {/* Copyright */}
           <div className="text-center sm:text-right">
             <p>&copy; {currentYear} Darrance Beh Heng Shek. All Rights Reserved.</p>
             <p className="text-xs text-gray-500 mt-1">
@@ -987,16 +886,14 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* AI Metrics Guide Modal */}
       <AIMetricsGuide 
         isOpen={showMetricsGuide} 
         onClose={() => setShowMetricsGuide(false)} 
       />
 
-      {/* Confirmation Modal */} 
       <ConfirmModal 
         isOpen={showConfirmModal}
-        {...confirmModalProps} // Spread the props from state
+        {...confirmModalProps}
       />
     </main>
   );
