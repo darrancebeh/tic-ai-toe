@@ -812,10 +812,14 @@ export default function Home() {
 
              <button
                onClick={resetGame}
-               disabled={!gameStarted || !!winnerInfo.winner || isThinking || isBatchTraining || isResettingAI}
+               disabled={(!gameStarted && !winnerInfo.winner) || (!winnerInfo.winner && gameStarted) || isThinking || isBatchTraining || isResettingAI}
                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex items-center justify-center gap-2"
+               title={(!gameStarted && !winnerInfo.winner) ? "Place a move on the board to start" : (!winnerInfo.winner && gameStarted) ? "Finish the current game before starting a new one" : ""}
              >
-               <FiRotateCcw /> Reset Game
+               {!gameStarted && !winnerInfo.winner ? 
+                 "Place a Move to Start Game" : 
+                 <><FiRotateCcw /> {winnerInfo.winner ? "Play Again" : "Play Again"}</>
+               }
              </button>
 
              <button
