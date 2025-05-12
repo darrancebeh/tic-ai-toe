@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo, FiLoader, FiRotateCcw } from 'react-icons/fi';
+import { FiGithub, FiLinkedin, FiTwitter, FiMail, FiInfo, FiLoader, FiRotateCcw, FiX } from 'react-icons/fi';
 
 interface WinnerInfo {
   winner: 'X' | 'O' | 'Draw' | null;
@@ -41,173 +41,82 @@ interface AIMetricsGuideProps {
 }
 
 function AIMetricsGuide({ isOpen, onClose }: AIMetricsGuideProps) {
-  if (!isOpen) return null;
-
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto"
       onClick={handleBackdropClick}
     >
-      <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">Understanding AI Metrics</h2>
+      <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full p-6 text-gray-300">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-semibold text-purple-400">Understanding our Toe AI Metrics</h2>
           <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors text-3xl font-bold p-2 -m-2"
-            aria-label="Close"
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-200 transition-colors"
+            aria-label="Close metrics guide"
           >
-            &times;
+            <FiX size={24} />
           </button>
         </div>
-        
-        <div className="p-6">
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-3 text-purple-400">AI Difficulty Scale</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-800">
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Difficulty</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Epsilon (ε)</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Win Chance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3 text-green-400 font-medium">Beginner</td>
-                    <td className="p-3">0.7 - 0.9</td>
-                    <td className="p-3 text-sm">AI is mostly exploring random moves and building a basic understanding of the game. Player victory is very likely.</td>
-                    <td className="p-3">70-90% with strategic play</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3 text-blue-400 font-medium">Intermediate</td>
-                    <td className="p-3">0.5 - 0.7</td>
-                    <td className="p-3 text-sm">AI balances exploration with some strategy it adapted and recognizes some basic patterns. Player victory is still very likely.</td>
-                    <td className="p-3">50-70% for experienced players</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3 text-yellow-400 font-medium">Advanced</td>
-                    <td className="p-3">0.3 - 0.5</td>
-                    <td className="p-3 text-sm">AI has adapted to only make occasional errors and will capitalize on player mistakes. Player victory can still be likely with best moves.</td>
-                    <td className="p-3">30-50% even with good strategy</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3 text-orange-400 font-medium">Expert</td>
-                    <td className="p-3">0.15 - 0.3</td>
-                    <td className="p-3 text-sm">AI has mastered most possible patterns and rarely makes errors with nearly optimal moves. Player victory is unlikely now, with draws being the common outcome.</td>
-                    <td className="p-3">10-20% for very skilled players</td>
-                  </tr>
-                  <tr>
-                    <td className="p-3 text-red-400 font-medium">The Great Toe</td>
-                    <td className="p-3">&lt; 0.15</td>
-                    <td className="p-3 text-sm">AI now plays practically perfect Tic-tac-toe. For a simple game like Tic-tac-toe, this approaches unbeatable play. Player victory is practically impossible. Best moves must be consistently made to secure a draw.</td>
-                    <td className="p-3">0-5% (draws are the best outcome)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-gray-400 italic">Note: Lower epsilon (ε) values mean the AI relies more on learned strategy rather than random exploration.</p>
-          </section>
-          
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-3 text-purple-400">Knowledge Score</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-800">
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Score Range</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Q-Table Size</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">0-20</td>
-                    <td className="p-3">0-1,100 states</td>
-                    <td className="p-3 text-sm">AI has minimal knowledge of the game and patterns, and has encountered only a small fraction of possible board states.</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">21-40</td>
-                    <td className="p-3">1,101-2,200 states</td>
-                    <td className="p-3 text-sm">AI has developed some basic understanding of common positions now, but still lacking any strategic depth.</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">41-60</td>
-                    <td className="p-3">2,201-3,300 states</td>
-                    <td className="p-3 text-sm">AI now has moderate experience across many different board states and understands basic winning patterns.</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">61-80</td>
-                    <td className="p-3">3,301-4,400 states</td>
-                    <td className="p-3 text-sm">AI has extensive knowledge of most common game variations and has developed strong patterns and strategies. AI playing best moves is now the norm.</td>
-                  </tr>
-                  <tr>
-                    <td className="p-3">81-100</td>
-                    <td className="p-3">4,401-5,478+ states</td>
-                    <td className="p-3 text-sm">AI has comprehensive knowledge of virtually all possible game states. At this level, all AI moves are practically the best possible moves.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-gray-400 italic">Note: Tic-tac-toe has 5,478 possible unique board states when accounting for symmetry. The AI becomes stronger as it learns more states.</p>
-          </section>
-          
-          <section className="mb-4">
-            <h3 className="text-lg font-semibold mb-3 text-purple-400">Learning Rate</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-800">
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Avg. Q Change</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Learning Stage</th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300 border-b border-gray-700">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">≥ 0.1</td>
-                    <td className="p-3">Rapid Learning</td>
-                    <td className="p-3 text-sm">AI is making major adjustments to its strategy and exploring patterns and board moves.</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">0.01 - 0.099</td>
-                    <td className="p-3">Active Learning</td>
-                    <td className="p-3 text-sm">AI is starting to refine its understanding of different positions.</td>
-                  </tr>
-                  <tr className="border-b border-gray-700">
-                    <td className="p-3">0.001 - 0.009</td>
-                    <td className="p-3">Fine Tuning</td>
-                    <td className="p-3 text-sm">AI is making small adjustments and optimizing its play in its strategy.</td>
-                  </tr>
-                  <tr>
-                    <td className="p-3">&lt; 0.001</td>
-                    <td className="p-3">Converging</td>
-                    <td className="p-3 text-sm">AI's strategy is stabilizing as it approaches practically optimal play. Extremely small adjustments indicate the AI has practically mastered the game.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-gray-400 italic">Note: As learning rate approaches zero, the AI has essentially "solved" the game and further training produces diminishing returns.</p>
-          </section>
 
-          <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-            <h4 className="font-semibold text-yellow-400 mb-2 flex items-center gap-2">
-              <FiInfo size={18} /> Important Note on Tic-Tac-Toe Difficulty
-            </h4>
-            <p className="text-sm text-gray-300">
-              Tic-tac-toe is a "solved game" with perfect play. With sufficient training, an AI can learn the perfect strategy that guarantees at least a draw against any opponent.
+        <div className="space-y-5 text-sm leading-relaxed">
+          <p>
+            Our Tic-Tac-Toe AI uses a Q-learning algorithm to learn and improve its gameplay over time. 
+            Here&apos;s a breakdown of the key metrics you&apos;ll see:
+          </p>
+
+          <div className="p-3 bg-gray-700/50 rounded-md border border-gray-600">
+            <h3 className="text-md font-semibold text-purple-300 mb-1">Difficulty (Epsilon - ε)</h3>
+            <p>
+              Epsilon (ε) represents the AI&apos;s exploration rate. A higher epsilon means the AI is more likely to make random moves to explore new strategies. 
+              As the AI learns, epsilon decreases, making it play more optimally (exploitation).
             </p>
-            <p className="text-sm text-gray-300 mt-2">
-              At the highest difficulty level (The Great Toe), the AI has essentially solved the game and becomes virtually unbeatable. The best possible outcome for a human player against a fully trained AI is a draw, which even then requires perfect play with all best moves. Any mistake against an optimal AI will result in a loss.
+            <ul className="list-disc list-inside mt-1 pl-2 text-xs text-gray-400 space-y-0.5">
+              <li><strong className="text-gray-300">Easy (ε &gt; 0.5):</strong> AI is in a high exploration phase, expect more random moves.</li>
+              <li><strong className="text-gray-300">Medium (0.15 ≤ ε ≤ 0.5):</strong> AI balances exploration and exploitation.</li>
+              <li><strong className="text-gray-300">Hard (ε &lt; 0.15):</strong> AI primarily exploits its learned knowledge, playing more strategically.</li>
+            </ul>
+          </div>
+
+          <div className="p-3 bg-gray-700/50 rounded-md border border-gray-600">
+            <h3 className="text-md font-semibold text-purple-300 mb-1">Knowledge Score</h3>
+            <p>
+              This score (0-100) indicates how much of the possible game states the AI has encountered and learned from (i.e., the size of its Q-table relative to the theoretical maximum for Tic-Tac-Toe).
+              A higher score means the AI has a more comprehensive understanding of the game.
+            </p>
+            <p className="mt-1 text-xs text-gray-400 italic">
+              Tic-tac-toe is a &quot;solved game&quot; with perfect play. With sufficient training, an AI can learn the perfect strategy that guarantees at least a draw against any opponent.
             </p>
           </div>
+
+          <div className="p-3 bg-gray-700/50 rounded-md border border-gray-600">
+            <h3 className="text-md font-semibold text-purple-300 mb-1">Learning Rate (Avg. Q Change)</h3>
+            <p>
+              This metric shows the average change in the AI&apos;s Q-values during its last learning update. 
+              A higher value indicates significant learning or adjustments in strategy. As the AI masters the game, this value will approach zero.
+            </p>
+            <p className="mt-1 text-xs text-gray-400 italic">Note: As learning rate approaches zero, the AI has essentially &quot;solved&quot; the game and further training produces diminishing returns.</p>
+          </div>
+          
+          <p className="text-xs text-center text-gray-500 pt-2">
+            The AI learns from each game played, including batch training sessions where it plays against itself thousands of times to rapidly improve.
+          </p>
+        </div>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={onClose}
+            className="px-5 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm font-medium"
+          >
+            Got it!
+          </button>
         </div>
       </div>
     </div>
@@ -323,7 +232,7 @@ export default function Home() {
   const resetAI = useCallback(async () => {
     setConfirmModalProps({
       title: "Reset AI Learning?",
-      message: "Are you sure you want to reset the AI's learning? This will delete all its learned knowledge and reset scores.",
+      message: "Are you sure you want to reset the AI&apos;s learning? This will delete all its learned knowledge and reset scores.",
       confirmText: "Reset AI",
       onConfirm: async () => {
         setShowConfirmModal(false);
@@ -369,8 +278,8 @@ export default function Home() {
 
   const runVisualSimulationStep = useCallback(() => {
     setVisualBoard(prevBoard => {
-      let currentBoard = [...prevBoard];
-      let winnerInfo = calculateWinner(currentBoard);
+      const currentBoard = [...prevBoard];
+      const winnerInfo = calculateWinner(currentBoard);
 
       if (winnerInfo.winner) {
         return Array(9).fill(null);
@@ -611,7 +520,7 @@ export default function Home() {
   } else {
     if (winner) {
       if (winner === 'Draw') {
-        status = <span className="font-bold text-yellow-500">It's a Draw!</span>;
+        status = <span className="font-bold text-yellow-500">It&apos;s a Draw!</span>;
       } else if (winner === 'X') {
         status = <span className="font-bold text-green-500">You Win! (X)</span>;
       } else {
@@ -627,7 +536,7 @@ export default function Home() {
       } else {
         status = (
           <span>
-            {currentPlayer === 'X' ? 'Your Turn (X)' : "AI's Turn (O)"}
+            {currentPlayer === 'X' ? 'Your Turn (X)' : "AI&apos;s Turn (O)"}
           </span>
         );
       }
@@ -682,7 +591,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-between pt-8 px-8 font-[family-name:var(--font-geist-sans)]">
       <div className="flex flex-col items-center justify-center flex-grow w-full max-w-md">
         <h1 className="text-4xl font-bold mb-4">
-          <span>Tic-my-Toe</span>
+          <span>Tic-AI-Toe</span>
           <span className="text-lg font-normal text-gray-400 ml-2">by db</span>
         </h1>
 

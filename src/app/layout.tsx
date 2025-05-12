@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "{db} Tic-my-Toe",
+  title: "{db} Tic-AI-Toe",
   description: "A PvAI game of Tic-Tac-Toe with Reinforcement Learning",
 };
 
